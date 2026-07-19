@@ -416,6 +416,11 @@
   body.touch .help-row { padding:7px 0; }
   body.touch #timeline { width:min(320px, 92vw); }
   body.touch .card-foot { padding-bottom:10px; }
+  /* スマホ：編集文字を大きく（読みやすさ＋iOSの自動ズーム対策） */
+  body.touch .card [contenteditable] { font-size:16px !important; line-height:1.6; }
+  body.touch .card input, body.touch .card textarea { font-size:16px !important; }
+  body.touch .card-title { font-size:17px; }
+  body.touch #qc-input, body.touch #pal-input { font-size:16px !important; }
 </style>
 </head>
 <body data-theme="hoshizora">
@@ -570,6 +575,7 @@
   <button id="mb-new" title="新規メモ">＋</button>
   <button id="mb-graph" title="グラフ">🕸️</button>
   <button id="mb-menu" title="メニュー">☰</button>
+  <a href="../../index.html" title="ゲームポータルへ" style="text-decoration:none;font-size:20px;padding:8px">🏠</a>
 </div>
 
 <div id="qc"><div id="qc-box">
@@ -3444,10 +3450,14 @@ function seed() {
   setTimeout(scanReminders, 3000);
   // あいことば設定済みなら自動でP2P接続
   if (state.room && navigator.onLine) setTimeout(() => joinRoom(state.room), 3500);
-  // スマホ初回だけ操作ヒント
-  if (IS_TOUCH && !state.mobHint) {
-    state.mobHint = 1; save();
-    setTimeout(() => toast("💡 空きスペースを長押し＝メモ作成 ／ カード上部を長押し＝メニュー"), 1600);
+  // スマホ：起動時に全メモが見える位置へ自動フィット＋操作ヒント
+  if (IS_TOUCH) {
+    setTimeout(fitAll, 500);
+    if (!state.mobHint2) {
+      state.mobHint2 = 1; save();
+      setTimeout(() => toast("💡 下の「＋」で新規メモ ／ 空きスペース長押しでもOK ／ 2本指でズーム"), 1800);
+      setTimeout(() => toast("💡 カードの上部を長押しすると色変え・削除メニュー"), 5200);
+    }
   }
 
   // 毎朝のデイリーノート（今日の受け皿）

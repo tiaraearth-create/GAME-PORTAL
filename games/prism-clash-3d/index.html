@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>プリズムクラッシュ3D ―光衣の闘士たち―</title>
 <style>
 :root{
@@ -13,22 +13,40 @@
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:var(--tx);user-select:none}
 #c3d{position:fixed;inset:0;display:block;touch-action:none}
-/* ===== タッチ操作（バーチャルパッド） ===== */
-#vpad{display:none;position:fixed;inset:0;z-index:12;pointer-events:none}
+/* ===== タッチ操作（フローティングスティック＋高品質ボタン） ===== */
+#vpad{display:none;position:fixed;inset:0;z-index:12;pointer-events:none;
+  -webkit-touch-callout:none;-webkit-user-select:none}
 body.battle.touchmode #vpad{display:block}
 body.touchmode #ctrlHint{display:none}
-.vstick{position:absolute;left:4vw;bottom:6vh;width:36vmin;height:36vmin;max-width:175px;max-height:175px;
-  border-radius:50%;background:rgba(255,255,255,.05);border:1.5px solid rgba(140,180,255,.35);
-  pointer-events:auto;touch-action:none}
-.vnub{position:absolute;left:50%;top:50%;width:42%;height:42%;border-radius:50%;transform:translate(-50%,-50%);
-  background:rgba(140,180,255,.35);border:1px solid rgba(180,210,255,.5);pointer-events:none}
-.vbtns{position:absolute;right:3vw;bottom:5vh;width:56vmin;height:46vmin;max-width:280px;max-height:230px;pointer-events:none}
-.vbtn{position:absolute;width:17vmin;height:17vmin;max-width:84px;max-height:84px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(18,24,48,.55);border:1.5px solid rgba(140,180,255,.4);color:#dfe8ff;
-  font-size:14px;font-weight:800;pointer-events:auto;touch-action:none;user-select:none;font-family:inherit}
-.vbtn:active{background:rgba(94,184,255,.45);transform:scale(.94)}
-.vbtn.sp{border-color:rgba(255,209,102,.6);color:#ffd166}
+body.touchmode{overscroll-behavior:none}
+#stickZone{position:absolute;left:0;bottom:0;width:46%;height:74%;pointer-events:auto;touch-action:none}
+#vsBase{position:absolute;width:118px;height:118px;margin:-59px 0 0 -59px;border-radius:50%;display:none;
+  background:radial-gradient(circle,rgba(120,160,255,.08) 40%,rgba(120,160,255,.2) 42%,rgba(120,160,255,.06) 100%);
+  border:2px solid rgba(150,190,255,.55);box-shadow:0 0 26px rgba(90,140,255,.4)}
+#vsNub{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,rgba(200,225,255,.95),rgba(94,150,255,.7) 70%);
+  box-shadow:0 2px 10px rgba(0,0,0,.5),0 0 20px rgba(120,170,255,.7)}
+#stickHint{position:absolute;left:14px;bottom:10px;font-size:10.5px;color:rgba(170,195,235,.65);pointer-events:none}
+.vbtns{position:absolute;right:calc(6px + env(safe-area-inset-right));bottom:calc(6px + env(safe-area-inset-bottom));
+  width:302px;height:198px;pointer-events:none}
+.vbtn{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:900;color:#eaf2ff;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;
+  font-family:inherit;
+  background:radial-gradient(circle at 35% 28%,rgba(96,140,235,.6),rgba(14,20,44,.85) 72%);
+  border:2px solid rgba(150,190,255,.55);
+  box-shadow:0 4px 14px rgba(0,0,0,.5),inset 0 0 14px rgba(120,170,255,.22);
+  transition:transform .05s}
+.vbtn:active{transform:scale(.88);border-color:#bfe0ff;
+  background:radial-gradient(circle at 35% 28%,rgba(150,195,255,.9),rgba(50,90,190,.85) 72%);
+  box-shadow:0 0 26px rgba(130,180,255,.9)}
+.vbtn.sp{border-color:rgba(255,209,102,.75);color:#ffe9b0;
+  background:radial-gradient(circle at 35% 28%,rgba(235,190,90,.55),rgba(44,32,10,.88) 72%);
+  box-shadow:0 4px 14px rgba(0,0,0,.5),inset 0 0 14px rgba(255,200,90,.25)}
+.vbtn.sp:active{transform:scale(.88);
+  background:radial-gradient(circle at 35% 28%,rgba(255,225,140,.95),rgba(190,140,40,.85) 72%);
+  box-shadow:0 0 28px rgba(255,210,110,.95)}
+.vbtn.dg{border-color:rgba(93,255,168,.65);color:#c8ffe2}
+@media (max-width:760px){ .vbtns{transform:scale(.86);transform-origin:bottom right} }
 #vpause{position:fixed;top:10px;right:10px;z-index:13;display:none;pointer-events:auto;
   width:46px;height:46px;border-radius:12px;border:1px solid rgba(140,180,255,.4);
   background:rgba(10,14,28,.6);color:#dfe8ff;font-size:19px;font-family:inherit}
@@ -195,7 +213,7 @@ body.battle #hud{display:block}
       <tr><td>一時停止</td><td colspan="3"><span class="kk">Esc</span></td></tr>
     </table>
     <div style="font-size:12.5px;color:var(--tx2);margin-top:12px;line-height:1.8">
-      📱 <b style="color:var(--grn)">スマホ</b>：画面に自動でパッドが出ます（左スティック移動＋右の技ボタン、画面ドラッグでカメラ）。横向き推奨<br>
+      📱 <b style="color:var(--grn)">スマホ</b>：画面左の<b>どこを触ってもスティック出現</b>。右のボタンで技、右エリアのドラッグでカメラ。横向き推奨<br>
       🔗 連続ヒットでコンボ。つなぐほど爽快、でもダメージは少しずつ軽くなる<br>
       🌀 回避の出始めは無敵。敵の攻撃をすり抜けろ<br>
       ⚡ 攻撃を当てる／受けるとゲージが溜まる。MAXで超必殺解放<br>
@@ -285,14 +303,17 @@ body.battle #hud{display:block}
   background:radial-gradient(ellipse at center,transparent 55%,rgba(2,3,10,.55) 100%)"></div>
 <!-- タッチ操作 -->
 <div id="vpad">
-  <div class="vstick" id="vstick"><div class="vnub" id="vnub"></div></div>
+  <div id="stickZone">
+    <div id="vsBase"><div id="vsNub"></div></div>
+    <span id="stickHint">左エリアどこでも触ればスティック／右エリアのドラッグでカメラ</span>
+  </div>
   <div class="vbtns">
-    <button class="vbtn" data-vk="KeyJ" style="right:34%;bottom:0">弱</button>
-    <button class="vbtn" data-vk="KeyK" style="right:0;bottom:24%">強</button>
-    <button class="vbtn" data-vk="KeyL" style="right:6%;bottom:60%">術</button>
-    <button class="vbtn sp" data-vk="KeyB" style="right:40%;bottom:58%">超必</button>
-    <button class="vbtn" data-vk="Space" style="right:70%;bottom:32%">跳</button>
-    <button class="vbtn" data-vk="KeyV" style="right:72%;bottom:0">回避</button>
+    <button class="vbtn dg" data-vk="KeyV" style="right:206px;bottom:6px;width:56px;height:56px;font-size:13px">回避</button>
+    <button class="vbtn" data-vk="KeyJ" style="right:104px;bottom:14px;width:78px;height:78px;font-size:20px">弱</button>
+    <button class="vbtn" data-vk="KeyK" style="right:18px;bottom:54px;width:66px;height:66px;font-size:18px">強</button>
+    <button class="vbtn" data-vk="Space" style="right:238px;bottom:72px;width:60px;height:60px;font-size:15px">跳</button>
+    <button class="vbtn sp" data-vk="KeyB" style="right:150px;bottom:102px;width:60px;height:60px;font-size:13px">超必</button>
+    <button class="vbtn" data-vk="KeyL" style="right:54px;bottom:128px;width:58px;height:58px;font-size:15px">術</button>
   </div>
 </div>
 <button id="vpause">⏸</button>
@@ -512,35 +533,42 @@ function vkSet(code,on){
 function initVPad(){
   document.querySelectorAll('[data-vk]').forEach(b=>{
     const code=b.dataset.vk;
-    b.addEventListener('pointerdown',e=>{ e.preventDefault(); try{b.setPointerCapture(e.pointerId);}catch(_){} vkSet(code,true); });
+    b.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      try{b.setPointerCapture(e.pointerId);}catch(_){}
+      vkSet(code,true);
+      if(navigator.vibrate) try{navigator.vibrate(8);}catch(_){}
+    });
     const off=()=>vkSet(code,false);
     b.addEventListener('pointerup',off);
     b.addEventListener('pointercancel',off);
     b.addEventListener('contextmenu',e=>e.preventDefault());
   });
-  const zone=document.getElementById('vstick'), nub=document.getElementById('vnub');
+  // フローティングスティック：左エリアのどこを触ってもその場に出現
+  const zone=document.getElementById('stickZone');
+  const base=document.getElementById('vsBase'), nub=document.getElementById('vsNub');
   if(!zone) return;
-  let pid=null;
-  function setDir(dx,dy){
-    const th=.3;
-    vkSet('KeyA',dx<-th); vkSet('KeyD',dx>th);
-    vkSet('KeyW',dy<-th); vkSet('KeyS',dy>th);
-    nub.style.left=(50+dx*28)+'%'; nub.style.top=(50+dy*28)+'%';
-  }
-  function move(e){
-    if(e.pointerId!==pid) return;
-    const r=zone.getBoundingClientRect();
-    const dx=clamp((e.clientX-(r.left+r.width/2))/(r.width/2),-1,1);
-    const dy=clamp((e.clientY-(r.top+r.height/2))/(r.height/2),-1,1);
-    setDir(dx,dy);
+  let pid=null, ox=0, oy=0;
+  const RADIUS=50;
+  function apply(dx,dy){
+    const len=Math.hypot(dx,dy)||1, k=len>RADIUS?RADIUS/len:1;
+    nub.style.transform=`translate(${dx*k}px,${dy*k}px)`;
+    const nx=dx*k/RADIUS, ny=dy*k/RADIUS;
+    vkSet('KeyA',nx<-.34); vkSet('KeyD',nx>.34);
+    vkSet('KeyW',ny<-.34); vkSet('KeyS',ny>.34);
   }
   zone.addEventListener('pointerdown',e=>{
-    e.preventDefault(); pid=e.pointerId;
+    e.preventDefault(); pid=e.pointerId; ox=e.clientX; oy=e.clientY;
     try{zone.setPointerCapture(pid);}catch(_){}
-    move(e);
+    base.style.left=ox+'px'; base.style.top=oy+'px'; base.style.display='block';
+    apply(0,0);
   });
-  zone.addEventListener('pointermove',move);
-  const end=e=>{ if(e.pointerId!==pid)return; pid=null; setDir(0,0); };
+  zone.addEventListener('pointermove',e=>{ if(e.pointerId===pid) apply(e.clientX-ox,e.clientY-oy); });
+  const end=e=>{
+    if(e.pointerId!==pid) return;
+    pid=null; base.style.display='none'; nub.style.transform='none';
+    vkSet('KeyA',false); vkSet('KeyD',false); vkSet('KeyW',false); vkSet('KeyS',false);
+  };
   zone.addEventListener('pointerup',end);
   zone.addEventListener('pointercancel',end);
   document.getElementById('vpause').addEventListener('click',()=>onEscape());
