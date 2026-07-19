@@ -416,6 +416,11 @@
   body.touch .help-row { padding:7px 0; }
   body.touch #timeline { width:min(320px, 92vw); }
   body.touch .card-foot { padding-bottom:10px; }
+  /* スマホ：ダブルタップ拡大・長押し選択メニュー・300ms遅延の抹消 */
+  html, body { touch-action:manipulation; }
+  body.touch { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  body.touch [contenteditable], body.touch input, body.touch textarea {
+    -webkit-user-select:text !important; user-select:text !important; -webkit-touch-callout:default !important; }
   /* スマホ：編集文字を大きく（読みやすさ＋iOSの自動ズーム対策） */
   body.touch .card [contenteditable] { font-size:16px !important; line-height:1.6; }
   body.touch .card input, body.touch .card textarea { font-size:16px !important; }
@@ -614,6 +619,10 @@ const LS_KEY = "hoshizora.v1";
 const LS_HIST = "hoshizora.hist.v1";
 const IS_TOUCH = matchMedia("(pointer: coarse)").matches;
 document.body.classList.toggle("touch", IS_TOUCH);
+if (IS_TOUCH) { // ダブルタップ拡大・ピンチページ拡大の抹消（編集操作は妨げない）
+  document.addEventListener("dblclick", e => { if (!e.target.closest("[contenteditable],input,textarea")) e.preventDefault(); }, { passive:false });
+  document.addEventListener("gesturestart", e => e.preventDefault(), { passive:false });
+}
 const COLORS = ["#7c96ff","#ff7ad5","#4dffd2","#ffd94d","#ff8a5c","#b08aff","#6ee7a0","#7dd3fc"];
 
 /* ---------------- state ---------------- */

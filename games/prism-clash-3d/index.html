@@ -10,7 +10,8 @@
   --tx:#e8eeff; --tx2:#8fa3c8; --ac:#5eb8ff; --ac2:#c06bff; --gold:#ffd166; --red:#ff5d7a; --grn:#5dffa8;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:manipulation}
+body.touchmode, body.touchmode *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
 body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:var(--tx);user-select:none}
 #c3d{position:fixed;inset:0;display:block;touch-action:none}
 /* ===== タッチ操作（フローティングスティック＋高品質ボタン） ===== */
@@ -146,11 +147,32 @@ body.battle #hud{display:block}
 #banner{position:absolute;top:34%;width:100%;text-align:center;font-size:54px;font-weight:900;letter-spacing:.1em;
   color:#fff;text-shadow:0 0 24px rgba(120,180,255,.8),0 3px 8px #000;display:none}
 #cutin{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
-  background:rgba(3,5,14,.72);z-index:15}
-#cutin .cn{font-size:20px;color:#cfe0ff;letter-spacing:.2em}
-#cutin .tn{font-size:52px;font-weight:900;letter-spacing:.12em;margin-top:8px;
-  background:linear-gradient(180deg,#fff,#8fd0ff);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 26px rgba(140,190,255,.8))}
+  z-index:15;overflow:hidden;--cc:#5eb8ff;
+  background:radial-gradient(circle at 50% 46%, rgba(24,32,72,.55), rgba(2,4,12,.94) 72%)}
+#cutStreaks{position:absolute;inset:-60%;
+  background:repeating-linear-gradient(115deg, transparent 0 36px, var(--cc) 36px 40px, transparent 40px 96px);
+  opacity:.15;animation:stMove .45s linear infinite}
+@keyframes stMove{from{transform:translateX(0)}to{transform:translateX(96px)}}
+#cutBarT,#cutBarB{position:absolute;left:0;right:0;height:11vh;background:#02040c;z-index:1}
+#cutBarT{top:0;border-bottom:2px solid var(--cc);animation:barT .3s ease-out both}
+#cutBarB{bottom:0;border-top:2px solid var(--cc);animation:barB .3s ease-out both}
+@keyframes barT{from{transform:translateY(-100%)}to{transform:none}}
+@keyframes barB{from{transform:translateY(100%)}to{transform:none}}
+#cutFlash{position:absolute;inset:0;background:#fff;pointer-events:none;animation:cutF .95s ease-out both;z-index:3}
+@keyframes cutF{0%{opacity:.95}14%{opacity:0}52%{opacity:0}60%{opacity:.4}100%{opacity:0}}
+#cutRing{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px;border-radius:50%;
+  border:4px solid var(--cc);animation:ringOut .8s ease-out .1s both;z-index:1}
+@keyframes ringOut{0%{opacity:.95;transform:scale(.15)}100%{opacity:0;transform:scale(24)}}
+#cutin .cn{font-size:19px;color:#dfe8ff;letter-spacing:.4em;z-index:2;text-indent:.4em;
+  animation:cnIn .45s cubic-bezier(.2,1.5,.4,1) both .05s}
+@keyframes cnIn{from{opacity:0;transform:translateX(-140px)}to{opacity:1;transform:none}}
+#cutin .tn{font-size:62px;font-weight:900;letter-spacing:.1em;margin-top:10px;z-index:2;
+  background:linear-gradient(180deg,#fff 30%,var(--cc));-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 34px var(--cc));
+  animation:tnSlam .5s cubic-bezier(.15,1.5,.3,1) both .14s}
+@keyframes tnSlam{0%{opacity:0;transform:scale(2.8) rotate(-3deg);filter:blur(16px)}
+  70%{filter:blur(0) drop-shadow(0 0 34px var(--cc))}
+  100%{opacity:1;transform:scale(1) rotate(0);filter:blur(0) drop-shadow(0 0 34px var(--cc))}}
 #ctrlHint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:11.5px;color:#9fb0d8;
   text-shadow:0 1px 3px #000;background:rgba(6,10,20,.5);padding:5px 16px;border-radius:12px;white-space:nowrap}
 .dmg{position:absolute;font-weight:900;text-shadow:0 2px 3px #000;pointer-events:none;transition:none;will-change:transform,opacity}
@@ -264,7 +286,11 @@ body.battle #hud{display:block}
   <div id="banner"></div>
   <div id="ctrlHint">WASD移動　Space跳躍　J弱 K強 L術 B超必　V回避　Q/Eカメラ　Esc一時停止</div>
 </div>
-<div id="cutin"><div class="cn" id="cutinName"></div><div class="tn" id="cutinTech"></div></div>
+<div id="cutin">
+  <div id="cutStreaks"></div><div id="cutBarT"></div><div id="cutBarB"></div>
+  <div id="cutRing"></div><div id="cutFlash"></div>
+  <div class="cn" id="cutinName"></div><div class="tn" id="cutinTech"></div>
+</div>
 <div id="flash"></div>
 
 <!-- ポーズ -->
@@ -525,7 +551,14 @@ Input.init();
    タッチ操作（バーチャルパッド → キー入力に変換）
 ===================================================== */
 const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
-if(IS_TOUCH) document.body.classList.add('touchmode');
+if(IS_TOUCH){
+  document.body.classList.add('touchmode');
+  // 三悪の抹消：ダブルタップ拡大／ピンチでのページ拡大／長押し選択・コピペメニュー
+  document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('selectstart',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('contextmenu',e=>e.preventDefault(),{passive:false});
+}
 function vkSet(code,on){
   if(on){ if(!Input.down[code]) Input.edge[code]=true; Input.down[code]=true; }
   else Input.down[code]=false;
@@ -1632,16 +1665,25 @@ function trySuper3(f){
   f.superS={t:0,phase:0,hitT:0,marks:[]};
   f.invulnT=1.4;
   const e=nearestEnemy3(f,16); if(e) f.yaw=f.yawTo(e);
-  G.cine={t:.95,f};
-  $('cutinName').textContent=f.def.name;
-  $('cutinTech').textContent=f.def.sup.name;
+  G.cine={t:1.05,f};
+  $('cutinName').textContent=f.def.name+' ―'+f.def.title+'―';
+  $('cutinTech').textContent=f.def.sup.name.replace('超必・','');
+  $('cutin').style.setProperty('--cc',f.def.css);
   $('cutin').style.display='flex';
-  SFX.superGo(); flashScreen(.35,f.def.css);
+  $('banner').style.display='none'; G.bannerT=0;
+  SFX.superGo();
 }
 function superUpdate3(f,dt){
   if(G.cine)return;
   const s=f.superS; s.t+=dt;
   const id=f.def.id, col=f.def.col;
+  // 発動中は足元から力が溢れ続ける
+  s.auraT=(s.auraT||0)-dt;
+  if(s.auraT<=0){
+    s.auraT=.16;
+    ring3(f.x,f.z,col.main,1.8,.32);
+    puff3(f.x,.3,f.z,col.glow,3,1.5,.5,5);
+  }
   if(id==='retsu'){
     f.invulnT=.2;
     f.vx=Math.sin(f.yaw)*4; f.vz=Math.cos(f.yaw)*4;
@@ -2133,7 +2175,17 @@ function quitGame3(){
 function step3(rdt){
   if(G.cine){
     G.cine.t-=rdt;
-    if(G.cine.t<=0){ $('cutin').style.display='none'; G.cine=null; }
+    if(G.cine.t<=0){
+      // カットイン明け：世界に衝撃が走る
+      const cf=G.cine.f;
+      $('cutin').style.display='none'; G.cine=null;
+      flashScreen(.5,cf.def.css);
+      ring3(cf.x,cf.z,cf.def.col.main,8,.55);
+      ring3(cf.x,cf.z,0xffffff,4,.4);
+      puff3(cf.x,1,cf.z,cf.def.col.glow,20,7,.7,7);
+      shake3(1.2); G.fovKick=Math.min(10,(G.fovKick||0)+7);
+      SFX.boom();
+    }
     updateFx(rdt*.3);
     return;
   }

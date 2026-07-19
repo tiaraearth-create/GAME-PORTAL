@@ -11,7 +11,8 @@
   --ac:#5eb8ff; --ac2:#c06bff; --gold:#ffd166; --red:#ff5d7a; --grn:#5dffa8;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:manipulation}
+body.touchmode, body.touchmode *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
 body{
   font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;
   color:var(--tx); user-select:none;
@@ -638,7 +639,14 @@ Input.init();
    タッチ操作（バーチャルパッド → キー入力に変換）
 ===================================================== */
 const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
-if(IS_TOUCH) document.body.classList.add('touchmode');
+if(IS_TOUCH){
+  document.body.classList.add('touchmode');
+  // 三悪の抹消：ダブルタップ拡大／ピンチでのページ拡大／長押し選択・コピペメニュー
+  document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('selectstart',e=>e.preventDefault(),{passive:false});
+  document.addEventListener('contextmenu',e=>e.preventDefault(),{passive:false});
+}
 function vkSet(code,on){
   if(on){ if(!Input.down[code]) Input.edge[code]=true; Input.down[code]=true; }
   else Input.down[code]=false;
@@ -2384,7 +2392,15 @@ function updateTexts(dt){
 function step(rdt){
   if(G.superCine){
     G.superCine.t-=rdt;
-    if(G.superCine.t<=0) G.superCine=null;
+    if(G.superCine.t<=0){
+      // カットイン明けの衝撃
+      const cf=G.superCine.f;
+      G.superCine=null;
+      addFlash(cf.def.col.glow,.45,.3); addShake(9);
+      puff(cf.x,cf.y-50,cf.def.col.glow,22,420,.6,5,200);
+      puff(cf.x,cf.y-50,'#ffffff',10,320,.4,4,200);
+      SFX.boom();
+    }
     updateFxOnly(rdt*.35);
     return;
   }
@@ -2869,8 +2885,8 @@ function render(rdt){
     ctx.globalAlpha=1;
   }
   drawHud(ctx);
-  // バナー
-  if(G.banner.t<G.banner.dur){
+  // バナー（カットイン中は隠す）
+  if(G.banner.t<G.banner.dur && !G.superCine){
     const b=G.banner;
     const p=b.t/b.dur;
     const sc2=p<.15? .5+p/.15*.6 : 1.1-Math.min(.1,(p-.15)*.3);
@@ -2901,47 +2917,69 @@ function render(rdt){
     ctx.fillText('K.O.',0,40);
     ctx.restore(); ctx.textAlign='left'; ctx.globalAlpha=1;
   }
-  // 超必カットイン
+  // 超必カットイン（格闘ゲーム式：キャラ大写し＋技名スラム）
   if(G.superCine){
     const sc=G.superCine, f=sc.f;
-    const p=1-sc.t/1.05;
-    ctx.fillStyle='rgba(2,4,12,.72)';
-    ctx.fillRect(0,0,W,H);
-    // 集中線
-    ctx.save(); ctx.translate(W/2,H/2);
-    ctx.strokeStyle=hexA(f.def.col.glow,.25);
-    for(let i=0;i<24;i++){
-      const a=i/24*TAU+p*.5;
-      ctx.lineWidth=2+((i*7)%5);
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a)*220,Math.sin(a)*220);
-      ctx.lineTo(Math.cos(a)*900,Math.sin(a)*900);
-      ctx.stroke();
-    }
-    ctx.restore();
-    // 光の帯
+    const p=clamp(1-sc.t/1.05,0,1);
+    const col=f.def.col;
+    // 暗転＋キャラカラーの背景グラデ
+    const bg=ctx.createRadialGradient(W*.28,H*.5,60,W*.28,H*.5,W*.75);
+    bg.addColorStop(0,hexA(col.main,.22));
+    bg.addColorStop(.55,'rgba(3,5,13,.9)');
+    bg.addColorStop(1,'rgba(2,3,10,.96)');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+    // 斜めに流れる光条
     ctx.save();
-    ctx.translate(W/2,H/2); ctx.rotate(-.09);
-    const bw=W*1.2;
-    const g=ctx.createLinearGradient(-bw/2,0,bw/2,0);
-    g.addColorStop(0,'rgba(255,255,255,0)');
-    g.addColorStop(.5,hexA(f.def.col.main,.4));
-    g.addColorStop(1,'rgba(255,255,255,0)');
-    ctx.fillStyle=g;
-    ctx.fillRect(-bw/2,-90,bw,180);
-    // キャラ名＆技名
-    const slide=p<.25? (0.25-p)*900 : 0;
-    ctx.font='700 22px sans-serif'; ctx.textAlign='center';
+    ctx.rotate(-.35);
+    ctx.globalAlpha=.14;
+    ctx.fillStyle=col.glow;
+    const sw2=42, flow=(G.time*640)%128;
+    for(let x=-H;x<W+H;x+=128) ctx.fillRect(x+flow-300,-200,10,H+800);
+    ctx.restore(); ctx.globalAlpha=1;
+    // レターボックス（上下から閉じる）
+    const barH=Math.min(1,p*4)*H*.12;
+    ctx.fillStyle='#02040c';
+    ctx.fillRect(0,0,W,barH); ctx.fillRect(0,H-barH,W,barH);
+    ctx.fillStyle=col.main;
+    ctx.fillRect(0,barH-3,W,3); ctx.fillRect(0,H-barH,W,3);
+    // 拡がる衝撃リング
+    if(p<.55){
+      ctx.globalAlpha=(1-p/.55)*.9;
+      ctx.strokeStyle=col.glow; ctx.lineWidth=5*(1-p/.55)+1;
+      ctx.beginPath(); ctx.arc(W*.28,H*.5,40+p*1400,0,TAU); ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    // キャラの大写し（左側・滑り込み＋足元グロー）
+    const slideC=p<.22? (0.22-p)/.22*-260 : 0;
+    const gl=ctx.createRadialGradient(W*.26+slideC,H*.62,30,W*.26+slideC,H*.62,300);
+    gl.addColorStop(0,hexA(col.glow,.4)); gl.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gl;
+    ctx.beginPath(); ctx.ellipse(W*.26+slideC,H*.62,300,330,0,0,TAU); ctx.fill();
+    const fake={def:f.def,x:0,y:0,face:1,state:'run',animT:G.time*1.6,hitFlash:0,invulnT:0,gauge:0,sc:1,atk:null,spinA:0};
+    ctx.save();
+    ctx.translate(W*.26+slideC, H*.95);
+    ctx.scale(3.6,3.6);
+    drawBody(ctx,fake,fake.animT);
+    ctx.restore();
+    // キャラ名＆技名（右側・スラムイン）
+    ctx.save();
+    ctx.translate(W*.64,H*.46);
+    const slam=p<.3? lerp(2.6,1,clamp(p/.3,0,1)) : 1;
+    const ta=clamp(p/.18,0,1);
+    ctx.globalAlpha=ta;
+    ctx.font='700 21px sans-serif'; ctx.textAlign='center';
     ctx.fillStyle='#dfe8ff';
-    ctx.fillText(f.def.name,slide,-46);
-    ctx.font='900 56px sans-serif';
-    ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=10;
-    ctx.strokeText(sc.name,-slide,28);
-    const g2=ctx.createLinearGradient(0,-20,0,40);
+    ctx.fillText(`${f.def.name} ―${f.def.title}―`,0,-52);
+    ctx.scale(slam,slam);
+    const nm=sc.name.replace('超必・','');
+    ctx.font='900 62px sans-serif';
+    ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.lineWidth=12;
+    ctx.strokeText(nm,0,26);
+    const g2=ctx.createLinearGradient(0,-24,0,44);
     g2.addColorStop(0,'#fff'); g2.addColorStop(1,f.def.col.glow);
     ctx.fillStyle=g2;
-    ctx.fillText(sc.name,-slide,28);
-    ctx.restore(); ctx.textAlign='left';
+    ctx.fillText(nm,0,26);
+    ctx.restore(); ctx.textAlign='left'; ctx.globalAlpha=1;
   }
 }
 /* =====================================================
