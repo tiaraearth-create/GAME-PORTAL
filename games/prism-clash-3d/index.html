@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>プリズムクラッシュ3D ―光衣の闘士たち―</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 :root{
   --bg:#070a14; --panel:rgba(255,255,255,.05); --line:rgba(140,180,255,.2);
@@ -460,8 +463,10 @@ const SCALES={heroic:[0,2,4,7,9,12,14,16],dark:[0,2,3,7,8,12,14,15],calm:[0,2,4,
 const BGM_DEFS={
   menu:{bpm:96,root:220,scale:'calm',lead:'triangle',bassP:[0,0,3,0,5,5,3,0],drive:.35,drums:false},
   battle:{bpm:138,root:196,scale:'heroic',lead:'square',bassP:[0,0,7,0,5,5,3,3],drive:.85,drums:true},
+  battle2:{bpm:148,root:207.7,scale:'cyber',lead:'square',bassP:[0,3,5,3,7,5,3,10],drive:.9,drums:true},
   boss:{bpm:158,root:155.6,scale:'dark',lead:'sawtooth',bassP:[0,0,0,3,2,2,2,8],drive:1,drums:true}
 };
+SCALES.cyber=[0,3,5,7,10,12,15,17];
 const BGM={cur:null,timer:null,step:0,next:0,seed:1,
   rnd(){this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;},
   play(name){
@@ -2078,7 +2083,8 @@ function startWave3(){
   }else{
     ms.queue=3+ms.wave;
     banner3('WAVE '+ms.wave,'#fff',1.4);
-    SFX.wave(); BGM.play('battle');
+    SFX.wave();
+    BGM.play(ms.wave%6<3?'battle':'battle2'); // 波が進むと曲調が変わる
   }
 }
 function waveLogic3(rdt){
