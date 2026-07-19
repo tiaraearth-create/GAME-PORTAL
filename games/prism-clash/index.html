@@ -124,7 +124,30 @@ input[type=range]{width:150px;accent-color:var(--ac)}
 .keytable td:first-child{color:var(--tx2)}
 .keytable .kk{display:inline-block;min-width:26px;text-align:center;padding:2px 8px;margin:0 2px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.06);font-size:12px;font-weight:700}
 /* ===== 戦闘キャンバス ===== */
-#cv{display:none;background:#000;max-width:100vw;max-height:100vh}
+#cv{display:none;background:#000;max-width:100vw;max-height:100vh;touch-action:none}
+/* ===== タッチ操作（バーチャルパッド） ===== */
+#vpad{display:none;position:fixed;inset:0;z-index:40;pointer-events:none}
+body.battle.touchmode #vpad{display:block}
+.vstick{position:absolute;left:4vw;bottom:6vh;width:36vmin;height:36vmin;max-width:175px;max-height:175px;
+  border-radius:50%;background:rgba(255,255,255,.05);border:1.5px solid rgba(140,180,255,.35);
+  pointer-events:auto;touch-action:none}
+.vstick .lbl{position:absolute;width:100%;text-align:center;font-size:9px;color:rgba(160,185,230,.55)}
+.vnub{position:absolute;left:50%;top:50%;width:42%;height:42%;border-radius:50%;transform:translate(-50%,-50%);
+  background:rgba(140,180,255,.35);border:1px solid rgba(180,210,255,.5);pointer-events:none}
+.vbtns{position:absolute;right:3vw;bottom:5vh;width:52vmin;height:44vmin;max-width:260px;max-height:220px;pointer-events:none}
+.vbtn{position:absolute;width:18vmin;height:18vmin;max-width:88px;max-height:88px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(18,24,48,.55);border:1.5px solid rgba(140,180,255,.4);color:#dfe8ff;
+  font-size:14px;font-weight:800;pointer-events:auto;touch-action:none;user-select:none;font-family:inherit}
+.vbtn:active{background:rgba(94,184,255,.45);transform:scale(.94)}
+.vbtn.sp{border-color:rgba(255,209,102,.6);color:#ffd166}
+#vpause{position:fixed;top:86px;right:10px;z-index:41;display:none;pointer-events:auto;
+  width:46px;height:46px;border-radius:12px;border:1px solid rgba(140,180,255,.4);
+  background:rgba(10,14,28,.6);color:#dfe8ff;font-size:19px;font-family:inherit}
+body.battle.touchmode #vpause{display:block}
+#rotateHint{position:fixed;top:0;left:0;right:0;z-index:39;display:none;padding:7px;text-align:center;
+  background:rgba(10,14,30,.92);font-size:12px;color:#8fd0ff;border-bottom:1px solid rgba(140,180,255,.3)}
+@media (orientation:portrait){ body.battle.touchmode #rotateHint{display:block} }
 body.battle #cv{display:block}
 body.battle .scr{display:none!important}
 /* ===== オーバーレイ ===== */
@@ -250,6 +273,11 @@ body.battle .scr{display:none!important}
         <tr><td>弱攻撃</td><td><span class="kk">K</span></td><td>強攻撃</td><td><span class="kk">L</span></td></tr>
         <tr><td>術</td><td><span class="kk">;</span></td><td>超必殺</td><td><span class="kk">.</span></td></tr>
       </table>
+      <div style="font-weight:700;margin:14px 0 8px;color:var(--grn)">📱 スマホ</div>
+      <table class="keytable">
+        <tr><td>操作</td><td colspan="3">画面に自動でパッドが出ます。左スティック（上でジャンプ・下でガード）＋右の技ボタン。横向き推奨</td></tr>
+        <tr><td>対戦モード</td><td colspan="3">2人対戦はキーボードが必要なのでPC推奨</td></tr>
+      </table>
       <div style="font-weight:700;margin:14px 0 8px;color:var(--gold)">奥義システム</div>
       <table class="keytable">
         <tr><td>コンボ</td><td colspan="3">連続ヒットでコンボ数が増える。つなげるほど気持ちいいが、ダメージは少しずつ軽くなる</td></tr>
@@ -317,6 +345,24 @@ body.battle .scr{display:none!important}
       <button class="btn pri" id="cfYes">実行する</button>
     </div>
   </div></div>
+
+  <!-- タッチ操作 -->
+  <div id="vpad">
+    <div class="vstick" id="vstick">
+      <span class="lbl" style="top:6%">↑ジャンプ</span>
+      <span class="lbl" style="bottom:6%">↓ガード</span>
+      <div class="vnub" id="vnub"></div>
+    </div>
+    <div class="vbtns">
+      <button class="vbtn" data-vk="KeyF" style="right:34%;bottom:0">弱</button>
+      <button class="vbtn" data-vk="KeyG" style="right:0;bottom:26%">強</button>
+      <button class="vbtn" data-vk="KeyH" style="right:8%;bottom:62%">術</button>
+      <button class="vbtn sp" data-vk="KeyB" style="right:44%;bottom:58%">超必</button>
+      <button class="vbtn" data-vk="KeyV" style="right:70%;bottom:4%">回避</button>
+    </div>
+  </div>
+  <button id="vpause">⏸</button>
+  <div id="rotateHint">📱 スマホは横向きがおすすめ！（縦でも遊べます）</div>
 
   <div id="toasts"></div>
 </div>
@@ -570,6 +616,54 @@ const Input = {
   endFrame(){ this.edge={}; }
 };
 Input.init();
+
+/* =====================================================
+   タッチ操作（バーチャルパッド → キー入力に変換）
+===================================================== */
+const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+if(IS_TOUCH) document.body.classList.add('touchmode');
+function vkSet(code,on){
+  if(on){ if(!Input.down[code]) Input.edge[code]=true; Input.down[code]=true; }
+  else Input.down[code]=false;
+}
+function initVPad(){
+  document.querySelectorAll('[data-vk]').forEach(b=>{
+    const code=b.dataset.vk;
+    b.addEventListener('pointerdown',e=>{ e.preventDefault(); try{b.setPointerCapture(e.pointerId);}catch(_){} vkSet(code,true); });
+    const off=()=>vkSet(code,false);
+    b.addEventListener('pointerup',off);
+    b.addEventListener('pointercancel',off);
+    b.addEventListener('contextmenu',e=>e.preventDefault());
+  });
+  const zone=document.getElementById('vstick'), nub=document.getElementById('vnub');
+  if(!zone) return;
+  let pid=null;
+  function setDir(dx,dy){
+    const th=.3;
+    vkSet('KeyA',dx<-th); vkSet('KeyD',dx>th);
+    vkSet('KeyW',dy<-.45);   // 上フリック＝ジャンプ
+    vkSet('KeyS',dy>.45);    // 下ホールド＝ガード
+    nub.style.left=(50+dx*28)+'%'; nub.style.top=(50+dy*28)+'%';
+  }
+  function move(e){
+    if(e.pointerId!==pid) return;
+    const r=zone.getBoundingClientRect();
+    const dx=clamp((e.clientX-(r.left+r.width/2))/(r.width/2),-1,1);
+    const dy=clamp((e.clientY-(r.top+r.height/2))/(r.height/2),-1,1);
+    setDir(dx,dy);
+  }
+  zone.addEventListener('pointerdown',e=>{
+    e.preventDefault(); pid=e.pointerId;
+    try{zone.setPointerCapture(pid);}catch(_){}
+    move(e);
+  });
+  zone.addEventListener('pointermove',move);
+  const end=e=>{ if(e.pointerId!==pid)return; pid=null; setDir(0,0); };
+  zone.addEventListener('pointerup',end);
+  zone.addEventListener('pointercancel',end);
+  document.getElementById('vpause').addEventListener('click',()=>onEscape());
+}
+initVPad();
 
 /* =====================================================
    キャラクター定義（全員が同じ「背骨」に乗る）

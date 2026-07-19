@@ -12,7 +12,31 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:var(--tx);user-select:none}
-#c3d{position:fixed;inset:0;display:block}
+#c3d{position:fixed;inset:0;display:block;touch-action:none}
+/* ===== タッチ操作（バーチャルパッド） ===== */
+#vpad{display:none;position:fixed;inset:0;z-index:12;pointer-events:none}
+body.battle.touchmode #vpad{display:block}
+body.touchmode #ctrlHint{display:none}
+.vstick{position:absolute;left:4vw;bottom:6vh;width:36vmin;height:36vmin;max-width:175px;max-height:175px;
+  border-radius:50%;background:rgba(255,255,255,.05);border:1.5px solid rgba(140,180,255,.35);
+  pointer-events:auto;touch-action:none}
+.vnub{position:absolute;left:50%;top:50%;width:42%;height:42%;border-radius:50%;transform:translate(-50%,-50%);
+  background:rgba(140,180,255,.35);border:1px solid rgba(180,210,255,.5);pointer-events:none}
+.vbtns{position:absolute;right:3vw;bottom:5vh;width:56vmin;height:46vmin;max-width:280px;max-height:230px;pointer-events:none}
+.vbtn{position:absolute;width:17vmin;height:17vmin;max-width:84px;max-height:84px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(18,24,48,.55);border:1.5px solid rgba(140,180,255,.4);color:#dfe8ff;
+  font-size:14px;font-weight:800;pointer-events:auto;touch-action:none;user-select:none;font-family:inherit}
+.vbtn:active{background:rgba(94,184,255,.45);transform:scale(.94)}
+.vbtn.sp{border-color:rgba(255,209,102,.6);color:#ffd166}
+#vpause{position:fixed;top:10px;right:10px;z-index:13;display:none;pointer-events:auto;
+  width:46px;height:46px;border-radius:12px;border:1px solid rgba(140,180,255,.4);
+  background:rgba(10,14,28,.6);color:#dfe8ff;font-size:19px;font-family:inherit}
+body.battle.touchmode #vpause{display:block}
+#rotateHint{position:fixed;top:0;left:0;right:0;z-index:11;display:none;padding:7px;text-align:center;
+  background:rgba(10,14,30,.92);font-size:12px;color:#8fd0ff;border-bottom:1px solid rgba(140,180,255,.3)}
+@media (orientation:portrait){ body.battle.touchmode #rotateHint{display:block} }
+body.touchmode #waveInfo{top:66px}
 /* ===== 画面 ===== */
 .scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;overflow-y:auto;
   padding:28px 18px 50px;z-index:20;
@@ -171,6 +195,7 @@ body.battle #hud{display:block}
       <tr><td>一時停止</td><td colspan="3"><span class="kk">Esc</span></td></tr>
     </table>
     <div style="font-size:12.5px;color:var(--tx2);margin-top:12px;line-height:1.8">
+      📱 <b style="color:var(--grn)">スマホ</b>：画面に自動でパッドが出ます（左スティック移動＋右の技ボタン、画面ドラッグでカメラ）。横向き推奨<br>
       🔗 連続ヒットでコンボ。つなぐほど爽快、でもダメージは少しずつ軽くなる<br>
       🌀 回避の出始めは無敵。敵の攻撃をすり抜けろ<br>
       ⚡ 攻撃を当てる／受けるとゲージが溜まる。MAXで超必殺解放<br>
@@ -258,6 +283,20 @@ body.battle #hud{display:block}
 
 <div id="vignette" style="position:fixed;inset:0;pointer-events:none;z-index:6;
   background:radial-gradient(ellipse at center,transparent 55%,rgba(2,3,10,.55) 100%)"></div>
+<!-- タッチ操作 -->
+<div id="vpad">
+  <div class="vstick" id="vstick"><div class="vnub" id="vnub"></div></div>
+  <div class="vbtns">
+    <button class="vbtn" data-vk="KeyJ" style="right:34%;bottom:0">弱</button>
+    <button class="vbtn" data-vk="KeyK" style="right:0;bottom:24%">強</button>
+    <button class="vbtn" data-vk="KeyL" style="right:6%;bottom:60%">術</button>
+    <button class="vbtn sp" data-vk="KeyB" style="right:40%;bottom:58%">超必</button>
+    <button class="vbtn" data-vk="Space" style="right:70%;bottom:32%">跳</button>
+    <button class="vbtn" data-vk="KeyV" style="right:72%;bottom:0">回避</button>
+  </div>
+</div>
+<button id="vpause">⏸</button>
+<div id="rotateHint">📱 スマホは横向きがおすすめ！（画面ドラッグでカメラ回転）</div>
 <div id="toasts"></div>
 <div id="err3d"><div>⚠️ 3Dエンジン（Three.js）を読み込めませんでした。<br>
 インターネット接続を確認してから再読み込みしてください。<br><br>
@@ -462,6 +501,53 @@ const Input={down:{},edge:{},
 Input.init();
 
 /* =====================================================
+   タッチ操作（バーチャルパッド → キー入力に変換）
+===================================================== */
+const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+if(IS_TOUCH) document.body.classList.add('touchmode');
+function vkSet(code,on){
+  if(on){ if(!Input.down[code]) Input.edge[code]=true; Input.down[code]=true; }
+  else Input.down[code]=false;
+}
+function initVPad(){
+  document.querySelectorAll('[data-vk]').forEach(b=>{
+    const code=b.dataset.vk;
+    b.addEventListener('pointerdown',e=>{ e.preventDefault(); try{b.setPointerCapture(e.pointerId);}catch(_){} vkSet(code,true); });
+    const off=()=>vkSet(code,false);
+    b.addEventListener('pointerup',off);
+    b.addEventListener('pointercancel',off);
+    b.addEventListener('contextmenu',e=>e.preventDefault());
+  });
+  const zone=document.getElementById('vstick'), nub=document.getElementById('vnub');
+  if(!zone) return;
+  let pid=null;
+  function setDir(dx,dy){
+    const th=.3;
+    vkSet('KeyA',dx<-th); vkSet('KeyD',dx>th);
+    vkSet('KeyW',dy<-th); vkSet('KeyS',dy>th);
+    nub.style.left=(50+dx*28)+'%'; nub.style.top=(50+dy*28)+'%';
+  }
+  function move(e){
+    if(e.pointerId!==pid) return;
+    const r=zone.getBoundingClientRect();
+    const dx=clamp((e.clientX-(r.left+r.width/2))/(r.width/2),-1,1);
+    const dy=clamp((e.clientY-(r.top+r.height/2))/(r.height/2),-1,1);
+    setDir(dx,dy);
+  }
+  zone.addEventListener('pointerdown',e=>{
+    e.preventDefault(); pid=e.pointerId;
+    try{zone.setPointerCapture(pid);}catch(_){}
+    move(e);
+  });
+  zone.addEventListener('pointermove',move);
+  const end=e=>{ if(e.pointerId!==pid)return; pid=null; setDir(0,0); };
+  zone.addEventListener('pointerup',end);
+  zone.addEventListener('pointercancel',end);
+  document.getElementById('vpause').addEventListener('click',()=>onEscape());
+}
+initVPad();
+
+/* =====================================================
    キャラクターデータ（2D版と同じ闘士たち）
 ===================================================== */
 const CHARS={
@@ -506,7 +592,7 @@ const T={ok:false};
 function initThree(){
   if(typeof THREE==='undefined'){ $('err3d').style.display='flex'; return false; }
   T.renderer=new THREE.WebGLRenderer({canvas:$('c3d'),antialias:true});
-  T.renderer.setPixelRatio(Math.min(window.devicePixelRatio,S.settings.quality*1.4));
+  T.renderer.setPixelRatio(Math.min(window.devicePixelRatio,S.settings.quality*1.4,IS_TOUCH?1.25:99));
   T.renderer.setSize(window.innerWidth,window.innerHeight);
   T.renderer.outputEncoding=THREE.sRGBEncoding;
   T.scene=new THREE.Scene();
@@ -547,12 +633,15 @@ function initThree(){
     T.camera.updateProjectionMatrix();
     T.renderer.setSize(window.innerWidth,window.innerHeight);
   });
-  // マウスドラッグでカメラ回転
-  let drag=false;
-  $('c3d').addEventListener('pointerdown',()=>{drag=true;});
-  window.addEventListener('pointerup',()=>{drag=false;});
+  // ドラッグでカメラ回転（マウス・タッチ両対応）
+  let dragId=null, dragX=0;
+  $('c3d').addEventListener('pointerdown',e=>{ dragId=e.pointerId; dragX=e.clientX; });
+  window.addEventListener('pointerup',e=>{ if(e.pointerId===dragId) dragId=null; });
+  window.addEventListener('pointercancel',e=>{ if(e.pointerId===dragId) dragId=null; });
   window.addEventListener('pointermove',e=>{
-    if(drag&&G&&!G.paused){ G.camYaw-=e.movementX*.006; G.camManual=1.8; }
+    if(e.pointerId===dragId&&G&&!G.paused){
+      G.camYaw-=(e.clientX-dragX)*.006; dragX=e.clientX; G.camManual=1.8;
+    }
   });
   T.ok=true;
   return true;
@@ -2289,7 +2378,7 @@ $('setSfx').oninput=e=>{ S.settings.sfx=e.target.value/100; AU.applyVol(); SFX.s
 $('setShake').onclick=function(){ S.settings.shake=!S.settings.shake; this.classList.toggle('on',S.settings.shake); SFX.select(); persist(); };
 document.querySelectorAll('[data-q]').forEach(b=>{
   b.onclick=()=>{ S.settings.quality=Number(b.dataset.q); persist(); SFX.select();
-    if(T.ok) T.renderer.setPixelRatio(Math.min(window.devicePixelRatio,S.settings.quality*1.4));
+    if(T.ok) T.renderer.setPixelRatio(Math.min(window.devicePixelRatio,S.settings.quality*1.4,IS_TOUCH?1.25:99));
     buildSettings();
   };
 });
