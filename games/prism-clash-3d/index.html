@@ -52,9 +52,10 @@ body.touchmode{overscroll-behavior:none}
   width:46px;height:46px;border-radius:12px;border:1px solid rgba(140,180,255,.4);
   background:rgba(10,14,28,.6);color:#dfe8ff;font-size:19px;font-family:inherit}
 body.battle.touchmode #vpause{display:block}
-#rotateHint{position:fixed;top:0;left:0;right:0;z-index:11;display:none;padding:7px;text-align:center;
-  background:rgba(10,14,30,.92);font-size:12px;color:#8fd0ff;border-bottom:1px solid rgba(140,180,255,.3)}
-@media (orientation:portrait){ body.battle.touchmode #rotateHint{display:block} }
+#rotateHint{display:none!important}
+@media (orientation:portrait){
+  body.battle.touchmode #stickZone{width:52%;height:56%}
+}
 body.touchmode #waveInfo{top:66px}
 /* ===== 画面 ===== */
 .scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;overflow-y:auto;
@@ -2238,9 +2239,9 @@ function camera3(rdt){
   const dx=Math.sin(cy)*8.8, dz=Math.cos(cy)*8.8;
   const want=new THREE.Vector3(tx+dx,5.2+ty2*.5,tz+dz);
   T.camera.position.lerp(want,Math.min(1,rdt*7));
-  // FOVキック（強打・超必で視界が弾ける）
+  // FOVキック（強打・超必で視界が弾ける）＋縦画面では広角にして見やすく
   G.fovKick=Math.max(0,(G.fovKick||0)-rdt*26);
-  const fov=58+G.fovKick;
+  const fov=(window.innerHeight>window.innerWidth?74:58)+G.fovKick;
   if(Math.abs(T.camera.fov-fov)>.01){ T.camera.fov=fov; T.camera.updateProjectionMatrix(); }
   const look=new THREE.Vector3(tx,ty2+1.6,tz);
   if(G&&G.shakeM>0&&S.settings.shake){
@@ -2324,7 +2325,8 @@ function renderIdle(rdt){
     fk.mesh.rotation.y=Math.sin(PV.camA*.7)*.5+Math.PI;
   }
   T.camera.position.set(Math.sin(PV.camA)*7.5,3.4,Math.cos(PV.camA)*7.5);
-  if(T.camera.fov!==58){ T.camera.fov=58; T.camera.updateProjectionMatrix(); }
+  const idleFov=window.innerHeight>window.innerWidth?74:58;
+  if(T.camera.fov!==idleFov){ T.camera.fov=idleFov; T.camera.updateProjectionMatrix(); }
   T.camera.lookAt(0,1.5,0);
   renderWorld(rdt);
 }

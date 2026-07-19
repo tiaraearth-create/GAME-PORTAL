@@ -163,9 +163,14 @@ body.touchmode{overscroll-behavior:none}
   width:46px;height:46px;border-radius:12px;border:1px solid rgba(140,180,255,.4);
   background:rgba(10,14,28,.6);color:#dfe8ff;font-size:19px;font-family:inherit}
 body.battle.touchmode #vpause{display:block}
-#rotateHint{position:fixed;top:0;left:0;right:0;z-index:39;display:none;padding:7px;text-align:center;
-  background:rgba(10,14,30,.92);font-size:12px;color:#8fd0ff;border-bottom:1px solid rgba(140,180,255,.3)}
-@media (orientation:portrait){ body.battle.touchmode #rotateHint{display:block} }
+#rotateHint{display:none!important}
+/* 縦画面：ゲーム画面を上に寄せ、下の空きスペースを操作エリアに（DS風レイアウト） */
+@media (orientation:portrait){
+  body.battle.touchmode #wrap{align-items:flex-start}
+  body.battle.touchmode #cv{margin-top:env(safe-area-inset-top)}
+  body.battle.touchmode #stickZone{width:52%;height:52%}
+  body.battle.touchmode #vpause{top:auto;bottom:calc(216px + env(safe-area-inset-bottom))}
+}
 body.battle #cv{display:block}
 body.battle .scr{display:none!important}
 /* ===== オーバーレイ ===== */

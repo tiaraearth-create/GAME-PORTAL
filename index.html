@@ -48,6 +48,7 @@ a.card{
 }
 .card:nth-child(1){animation-delay:.08s}.card:nth-child(2){animation-delay:.18s}
 .card:nth-child(3){animation-delay:.28s}.card:nth-child(4){animation-delay:.38s}
+.card:nth-child(5){animation-delay:.48s}
 @keyframes cardUp{from{opacity:0;transform:translateY(34px) scale(.94)}to{opacity:1;transform:none}}
 a.card:hover{transform:translateY(-7px) scale(1.015);border-color:var(--c1);
   box-shadow:0 22px 60px -12px var(--cs),0 0 0 1px var(--c1)}
@@ -90,9 +91,20 @@ footer b{color:var(--tx2)}
   </div>
   <div class="grid">
 
+    <a class="card" href="games/prism-defense/index.html" style="--c1:#8fd0ff;--cs:rgba(143,208,255,.28)">
+      <div class="prevWrap"><canvas data-prev="td" width="640" height="320"></canvas><div class="fade"></div>
+        <span class="badge">NEW ✦ TD</span></div>
+      <div class="body">
+        <div class="genre">TOWER DEFENSE × ACTION</div>
+        <h2>🏰 プリズムディフェンス</h2>
+        <p>押し寄せる敵軍から水晶を守るタワーディフェンス。タワーを築くだけじゃない——プリズムクラッシュの闘士を自分で操作して、防衛線の穴を自ら塞ぎに走れ。縦持ちでも横持ちでも遊べる。</p>
+        <div class="playRow"><span class="play">▶ 防衛する</span><span class="meta">スマホOK・縦横対応</span></div>
+      </div>
+    </a>
+
     <a class="card" href="games/prism-clash-3d/index.html" style="--c1:#5dffa8;--cs:rgba(93,255,168,.28)">
       <div class="prevWrap"><canvas data-prev="p3d" width="640" height="320"></canvas><div class="fade"></div>
-        <span class="badge">NEW ✦ 3D</span></div>
+        <span class="badge">3D</span></div>
       <div class="body">
         <div class="genre">3D ARENA ACTION</div>
         <h2>🌌 プリズムクラッシュ3D</h2>
@@ -141,6 +153,7 @@ footer b{color:var(--tx2)}
 "use strict";
 const TAU=Math.PI*2;
 const R=(a,b)=>a+Math.random()*(b-a);
+const lerp=(a,b,t)=>a+(b-a)*t;
 /* ================= 背景の星空 ================= */
 const bg=document.getElementById('bg'), bc=bg.getContext('2d');
 let BW=0,BH=0,stars=[],shoot=null;
@@ -390,6 +403,68 @@ function drawHm(g,W,H,t){
     g.globalAlpha=1;
   }
 }
+/* --- タワーディフェンス --- */
+function drawTd(g,W,H,t){
+  g.clearRect(0,0,W,H);
+  // 道
+  const pts=[[0,.7],[.22,.7],[.22,.3],[.5,.3],[.5,.72],[.78,.72],[.78,.45],[1,.45]].map(p=>[p[0]*W,p[1]*H]);
+  g.lineCap='round';g.lineJoin='round';
+  g.strokeStyle='#232e56';g.lineWidth=34;
+  g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke();
+  g.strokeStyle='rgba(143,208,255,.5)';g.lineWidth=3;g.setLineDash([10,26]);g.lineDashOffset=-t*50;
+  g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke();
+  g.setLineDash([]);
+  // 水晶（ゴール）
+  const bx=W*.94,by=H*.45;
+  g.fillStyle='rgba(143,208,255,.25)';
+  g.beginPath();g.arc(bx,by,26,0,TAU);g.fill();
+  g.fillStyle='#8fd0ff';
+  g.beginPath();g.moveTo(bx,by-20);g.lineTo(bx+11,by);g.lineTo(bx,by+18);g.lineTo(bx-11,by);g.closePath();g.fill();
+  // 道に沿って進む敵
+  const total=pts.reduce((a,p,i)=>i?a+Math.hypot(p[0]-pts[i-1][0],p[1]-pts[i-1][1]):0,0);
+  function posAt(d){
+    let acc=0;
+    for(let i=1;i<pts.length;i++){
+      const seg=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+      if(acc+seg>=d){const k=(d-acc)/seg;
+        return [lerp(pts[i-1][0],pts[i][0],k),lerp(pts[i-1][1],pts[i][1],k)];}
+      acc+=seg;
+    }
+    return pts[pts.length-1];
+  }
+  const foes=[];
+  for(let i=0;i<5;i++){
+    const d=((t*70+i*90)%total);
+    const [x,y]=posAt(d);
+    foes.push([x,y]);
+    g.fillStyle='#ff8866';
+    g.beginPath();g.arc(x,y-6,7,0,TAU);g.fill();
+    g.fillStyle='#20242f';
+    g.beginPath();g.arc(x,y-14,5,0,TAU);g.fill();
+  }
+  // タワー（撃つ）
+  const tws=[[W*.36,H*.52,'#ffd166'],[W*.64,H*.5,'#c08aff'],[W*.14,H*.48,'#5dffa8']];
+  tws.forEach((tw,i)=>{
+    const [x,y,c]=tw;
+    g.fillStyle='#2a3358';
+    g.beginPath();g.arc(x,y,11,0,TAU);g.fill();
+    const p=.7+.3*Math.sin(t*4+i*2);
+    const rg=g.createRadialGradient(x,y-16,1,x,y-16,12*p);
+    rg.addColorStop(0,'#fff');rg.addColorStop(.5,c);rg.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=rg;
+    g.beginPath();g.arc(x,y-16,12*p,0,TAU);g.fill();
+    // 一番近い敵へ射線
+    let best=null,bd=110;
+    for(const f of foes){const d2=Math.hypot(f[0]-x,f[1]-y);if(d2<bd){bd=d2;best=f;}}
+    if(best&&(t*3+i)%1<.5){
+      g.strokeStyle=c;g.lineWidth=2;g.globalAlpha=.8;
+      g.beginPath();g.moveTo(x,y-16);g.lineTo(best[0],best[1]-8);g.stroke();
+      g.globalAlpha=1;
+      g.fillStyle='#fff';
+      g.beginPath();g.arc(best[0],best[1]-8,3,0,TAU);g.fill();
+    }
+  });
+}
 /* ================= ループ ================= */
 let last=0;
 function loop(ts){
@@ -397,6 +472,7 @@ function loop(ts){
   const t=ts/1000, dt=Math.min(.05,(ts-last)/1000)||.016; last=ts;
   drawBg(t,dt);
   const io=(el)=>{const r=el.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight;};
+  if(PREV.td&&io(PREV.td.cv))  drawTd(PREV.td.g,640,320,t);
   if(PREV.p3d&&io(PREV.p3d.cv)) draw3d(PREV.p3d.g,640,320,t);
   if(PREV.p2d&&io(PREV.p2d.cv)) draw2d(PREV.p2d.g,640,320,t);
   if(PREV.bb&&io(PREV.bb.cv))  drawBb(PREV.bb.g,640,320,t);
