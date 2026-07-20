@@ -189,6 +189,12 @@ body.battle .scr{display:none!important}
 .ovlBox .rline{display:flex;justify-content:space-between;font-size:14px;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.06)}
 .ovlBox .rline .v{color:var(--gold);font-weight:700}
 .ovlBox .newrec{color:var(--grn);font-size:11px;margin-left:6px}
+/* 管理者パネル */
+.abtn{cursor:pointer;border:1px solid rgba(255,209,102,.4);background:rgba(30,24,8,.85);color:#ffe9b0;
+  border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;font-family:inherit;transition:.12s}
+.abtn:active{transform:scale(.95)}
+.abtn.on{background:rgba(255,209,102,.28);border-color:var(--gold);color:#fff;box-shadow:0 0 12px rgba(255,209,102,.4)}
+.abtn.on::after{content:" ✓"}
 /* トースト */
 #toasts{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{padding:10px 22px;border-radius:12px;border:1px solid rgba(255,209,102,.45);background:rgba(20,18,8,.92);
@@ -370,6 +376,14 @@ body.battle .scr{display:none!important}
       <button class="btn" id="cfNo">やめる</button>
       <button class="btn pri" id="cfYes">実行する</button>
     </div>
+  </div></div>
+
+  <!-- 管理者パネル -->
+  <div class="ovl" id="ovl-admin"><div class="ovlBox" style="width:min(540px,94vw)">
+    <h3 style="color:var(--gold);font-size:20px">👑 管理者パネル</h3>
+    <div style="color:var(--tx2);font-size:12px;margin-bottom:12px">戦闘中の項目はバトル中に使えます</div>
+    <div id="admGrid" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center"></div>
+    <div class="row"><button class="btn" id="admClose">とじる</button></div>
   </div></div>
 
   <!-- タッチ操作 -->
@@ -1361,9 +1375,11 @@ function nearestEnemy(f){
    ヒット処理（コンボ・ガード・ジャストガード・のけぞり）
 ===================================================== */
 function comboScale(n){ return Math.max(0.35, 1-0.06*n); }
+const isHumanF=x=>x&&['p1','p1solo','p2'].includes(x.ctrl);
 function landHit(f,e,a,opt){
   opt=opt||{};
   if(e.invulnT>0||e.state==='dodge'||e.state==='down') return false;
+  if(ADM.god&&isHumanF(e)) return false; // 管理者：無敵
   const dir = e.x>=f.x?1:-1;
   // ガード判定（攻撃者の方を向いてガード中のみ有効）
   if(e.state==='guard' && ((f.x-e.x)*e.face>=0)){
@@ -1387,7 +1403,7 @@ function landHit(f,e,a,opt){
   // 本ヒット
   G.combatT=0; // 練習モードの自動回復は「戦闘が途切れてから」
   const scale=opt.noScale?1:comboScale(f.comboN);
-  const dmg=Math.max(1,Math.round(a.dmg*scale));
+  const dmg=Math.max(1,Math.round(a.dmg*scale*(ADM.oneHit&&isHumanF(f)?50:1)));
   e.hp-=dmg;
   e.gauge=Math.min(100,e.gauge+dmg*0.2);
   const g0=f.gauge;
@@ -2425,6 +2441,7 @@ function step(rdt){
       G.delayed.splice(i,1);
     }
   }
+  if(ADM.gauge)for(const f of G.fighters)if(isHumanF(f))f.gauge=100;
   for(const f of G.fighters){
     if(f.ctrl==='ai'&&G.state==='fight'&&f.alive()&&!G.superCine) aiThink(f,dt);
     f.update(dt);
@@ -3165,6 +3182,79 @@ function toast(msg,cls){
   setTimeout(()=>el.remove(),3100);
 }
 /* =====================================================
+   管理者権限（ロゴ7回タップ or 「admin」とタイプで解放）
+===================================================== */
+const ADM={god:false,gauge:false,oneHit:false};
+function bAct(fn){ if(!G||!G.on){toast('⚠️ バトル中に使ってね','info');SFX.cancel();return;} fn(); }
+const ADM_ITEMS=[
+  {l:'💰 コイン +1,000',fn:()=>{S.coins+=1000;persist();$('coinDisp').textContent=S.coins;SFX.coin();toast('💰 +1,000');}},
+  {l:'💰 コイン +99,999',fn:()=>{S.coins+=99999;persist();$('coinDisp').textContent=S.coins;SFX.coin();toast('💰 +99,999');}},
+  {l:'🎭 全キャラ解放',fn:()=>{S.unlocked.chars=CHAR_LIST.slice();persist();checkAch();SFX.wave();toast('🎭 全闘士が解放された!');}},
+  {l:'🗺 全ステージ解放',fn:()=>{S.unlocked.stages=STAGE_LIST.slice();persist();SFX.wave();toast('🗺 全戦場が解放された!');}},
+  {l:'👑 ボスラッシュ解放',fn:()=>{S.unlocked.bossRush=true;persist();refreshTitle();SFX.wave();toast('👑 ボスラッシュ解放!');}},
+  {l:'🏅 実績 全達成',fn:()=>{ACHS.forEach(a=>S.ach[a.id]=true);persist();SFX.wave();toast('🏅 全実績を達成した!');}},
+  {l:'❤️ HP全回復',fn:()=>bAct(()=>{for(const f of G.fighters)if(isHumanF(f)){f.hp=f.maxhp;f.dmgLag=f.hp;}SFX.heal();toast('❤️ 全回復!');})},
+  {l:'💀 敵を全滅させる',fn:()=>bAct(()=>{let n=0;for(const e of G.fighters){if(e.team===1&&e.alive()){killFighter(G.p1,e,null,1);n++;}}toast(`💀 ${n}体を消し飛ばした`);})},
+  {t:'god',   l:'🛡 無敵モード'},
+  {t:'gauge', l:'⚡ ゲージ∞'},
+  {t:'oneHit',l:'👊 一撃必殺（威力×50）'},
+  {l:'♻️ 記録を全リセット',fn:()=>{S.records=defaultSave().records;persist();toast('♻️ 記録をリセットした','info');}}
+];
+function buildAdmin(){
+  const g=$('admGrid');g.innerHTML='';
+  for(const it of ADM_ITEMS){
+    const b=document.createElement('button');
+    b.className='abtn'+(it.t&&ADM[it.t]?' on':'');
+    b.textContent=it.l;
+    b.onclick=()=>{
+      if(it.t){ADM[it.t]=!ADM[it.t];SFX.gauge();buildAdmin();toast((ADM[it.t]?'✅ ON：':'⬜ OFF：')+it.l);}
+      else it.fn();
+    };
+    g.appendChild(b);
+  }
+}
+function openAdmin(){ buildAdmin(); $('ovl-admin').classList.add('on'); }
+$('admClose').onclick=()=>{ $('ovl-admin').classList.remove('on'); SFX.cancel(); };
+function refreshAdminBtns(){
+  if(!S.settings.admin)return;
+  if(!$('btnAdmin')){
+    const b=document.createElement('button');
+    b.className='btn small';b.id='btnAdmin';b.textContent='👑 管理者';
+    b.style.borderColor='rgba(255,209,102,.5)';b.style.color='#ffe9b0';
+    b.onclick=()=>{SFX.select();openAdmin();};
+    document.querySelector('.titlefoot').appendChild(b);
+  }
+  if(!$('btnAdminP')){
+    const b=document.createElement('button');
+    b.className='btn';b.id='btnAdminP';b.textContent='👑';
+    b.style.borderColor='rgba(255,209,102,.5)';b.style.color='#ffe9b0';
+    b.onclick=()=>{SFX.select();openAdmin();};
+    $('btnResume').parentElement.appendChild(b);
+  }
+}
+function unlockAdmin(){
+  const first=!S.settings.admin;
+  S.settings.admin=true;persist();
+  refreshAdminBtns();
+  if(first){toast('👑 管理者権限を解放した!!');SFX.wave();}
+  openAdmin();
+}
+let admBuf='';
+window.addEventListener('keydown',e=>{
+  admBuf=(admBuf+(e.key||'').toLowerCase()).slice(-5);
+  if(admBuf==='admin')unlockAdmin();
+});
+(function(){
+  const lg=document.querySelector('.logo');
+  let n=0,t0=0;
+  lg.addEventListener('pointerdown',()=>{
+    const now=performance.now();
+    if(now-t0>1600)n=0;
+    t0=now;
+    if(++n>=7){n=0;unlockAdmin();}
+  });
+})();
+/* =====================================================
    画面遷移＆メニュー
 ===================================================== */
 const UIS={mode:null,pick:1,p1:null,p2:null,diff:2,vsCpu:false,cpuLv:2,stage:'arena',sel:null};
@@ -3508,6 +3598,7 @@ $('btnSelfTest').onclick=()=>{
 ===================================================== */
 fitCanvas();
 refreshTitle();
+refreshAdminBtns();
 checkAch();
 </script>
 </body>

@@ -115,6 +115,13 @@ body.battle #hud{display:block}
 .rline{display:flex;justify-content:space-between;font-size:14px;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.06)}
 .rline .v{color:var(--gold);font-weight:700}
 .newrec{color:var(--grn);font-size:11px;margin-left:6px}
+/* 管理者パネル */
+.abtn{cursor:pointer;border:1px solid rgba(255,209,102,.4);background:rgba(30,24,8,.85);color:#ffe9b0;
+  border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;font-family:inherit;transition:.12s}
+.abtn:active{transform:scale(.95)}
+.abtn.on{background:rgba(255,209,102,.28);border-color:var(--gold);color:#fff;
+  box-shadow:0 0 12px rgba(255,209,102,.4)}
+.abtn.on::after{content:" ✓"}
 #toasts{position:fixed;top:calc(54px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{padding:9px 20px;border-radius:12px;border:1px solid rgba(255,209,102,.45);background:rgba(20,18,8,.93);
   color:var(--gold);font-size:13.5px;font-weight:700;animation:tIn .3s ease,tOut .4s ease 2.4s forwards}
@@ -168,6 +175,7 @@ body.battle #hud{display:block}
     <span class="st">💰<span id="hGold">220</span></span>
     <span class="st">WAVE <span id="hWave">0</span><small>/30</small></span>
     <button class="tbtn go" id="btnWave">▶ 次のWAVE</button>
+    <button class="tbtn" id="btnAuto">🔁 OFF</button>
     <button class="tbtn" id="btnSpeed">⏩ ×1</button>
     <button class="tbtn" id="btnView">🔭</button>
     <button class="tbtn" id="btnPause">⏸</button>
@@ -206,6 +214,14 @@ body.battle #hud{display:block}
     <button class="btn" id="btnCont" style="display:none">♾ 続けて防衛</button>
     <button class="btn" id="btnToTitle">タイトルへ</button>
   </div>
+</div></div>
+
+<!-- 管理者パネル -->
+<div class="ovl" id="ovl-admin"><div class="ovlBox" style="width:min(540px,94vw)">
+  <h3 style="color:var(--gold)">👑 管理者パネル</h3>
+  <div style="color:var(--tx2);font-size:12px;margin-bottom:12px">力の使いすぎに注意。チートON中の記録も自己責任で！</div>
+  <div id="admGrid" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center"></div>
+  <div class="row"><button class="btn" id="admClose">とじる</button></div>
 </div></div>
 
 <div id="toasts"></div>
@@ -399,6 +415,8 @@ function toast(msg,cls){
   $('toasts').appendChild(el);
   setTimeout(()=>el.remove(),2900);
 }
+/* ===== 管理者チートフラグ（セッション中のみ有効） ===== */
+const ADM={free:false,towerX:false,heroX:false,fast:false,noLeak:false,noCd:false};
 /* =====================================================
    データ：ヒーロー（プリズムクラッシュの闘士たち）
 ===================================================== */
@@ -440,8 +458,8 @@ const TOWERS={
   snipe:{ico:'🎯',nm:'狙撃塔',cost:200,range:310,rate:2.2,dmg:115,color:'#c06bff',desc:'超遠距離・高威力'}
 };
 const TOWER_LIST=['bolt','slash','cannon','frost','snipe'];
-function towerStat(t){ // レベル反映
-  const d=TOWERS[t.type], m=Math.pow(1.6,t.lvl-1);
+function towerStat(t){ // レベル反映（＋管理者チート）
+  const d=TOWERS[t.type], m=Math.pow(1.6,t.lvl-1)*(ADM.towerX?10:1);
   return {dmg:d.dmg*m, range:d.range*Math.pow(1.13,t.lvl-1), rate:d.rate*Math.pow(.88,t.lvl-1),
     splash:d.splash?d.splash*Math.pow(1.1,t.lvl-1):0, slow:d.slow, slowT:d.slowT};
 }
@@ -633,13 +651,9 @@ function updateCam(dt){
   const full=G.viewMode===2;
   const tx=full?MAP_W/2:(G.hero?G.hero.x:MAP_W/2);
   const ty=full?MAP_H/2:(G.hero?G.hero.y:MAP_H/2);
-  cam.x+=(tx-cam.x)*Math.min(1,dt*5);
-  cam.y+=(ty-cam.y)*Math.min(1,dt*5);
-  const hw=CW/2/cam.zoom,hh=CH/2/cam.zoom,M=40;
-  cam.x=clamp(cam.x,hw-M,MAP_W-hw+M);
-  cam.y=clamp(cam.y,hh-M,MAP_H-hh+M);
-  if(MAP_W+M*2<hw*2)cam.x=MAP_W/2;
-  if(MAP_H+M*2<hh*2)cam.y=MAP_H/2;
+  // 追従/ワイドはヒーローを常に画面中央に（端でもズラさない）
+  cam.x+=(tx-cam.x)*Math.min(1,dt*6);
+  cam.y+=(ty-cam.y)*Math.min(1,dt*6);
 }
 function s2w(sx,sy){ return {x:(sx-CW/2)/cam.zoom+cam.x, y:(sy-CH/2)/cam.zoom+cam.y}; }
 /* ===== パーティクル＆エフェクト ===== */
@@ -670,7 +684,7 @@ function newGame(heroId){
     gold:220,lives:20,wave:0,waveActive:false,
     spawnQ:[],spawnT:0,enemies:[],projs:[],beams:[],parts:[],rings:[],texts:[],
     sel:null,speed:1,paused:false,over:false,endless:false,delayed:[],
-    viewMode:IS_TOUCH?1:0,zoomMul:1,
+    viewMode:IS_TOUCH?1:0,zoomMul:1,autoWave:!!S.settings.autoWave,autoT:0,
     time:0,kills:0,shake:0,mvx:0,mvy:0,skillFx:0,banner:'',bannerT:0};
   S.records.plays++;persist();
 }
@@ -738,6 +752,7 @@ function damageEnemy(e,dmg,byHero,color){
   }else{SFX.hit();}
 }
 function leak(e){
+  if(ADM.noLeak){ ring(BASE.x,BASE.y,'#5dffa8',70,.4); ftext(BASE.x,BASE.y-60,'無敵!','#5dffa8',14); return; }
   G.lives-=e.boss?5:1;
   SFX.leak();G.shake=Math.max(G.shake,8);
   ring(BASE.x,BASE.y,'#ff5d7a',90,.5);
@@ -773,7 +788,7 @@ function updateEnemies(dt){
 }
 /* ===== タワー ===== */
 function buildTower(pad,type){
-  const cost=TOWERS[type].cost;
+  const cost=ADM.free?0:TOWERS[type].cost;
   if(G.gold<cost){toast('💰 お金が足りない!','info');SFX.cancel();return false;}
   G.gold-=cost;
   pad.tower={padIdx:pad.i,type,lvl:1,cd:0,invested:cost,x:pad.x,y:pad.y,animT:R(0,5),recoil:0};
@@ -785,7 +800,7 @@ function buildTower(pad,type){
 }
 function upgradeTower(t){
   if(t.lvl>=3){toast('これ以上強化できない','info');return;}
-  const c=upCost(t.type,t.lvl);
+  const c=ADM.free?0:upCost(t.type,t.lvl);
   if(G.gold<c){toast('💰 お金が足りない!','info');SFX.cancel();return;}
   G.gold-=c;t.invested+=c;t.lvl++;
   SFX.up();
@@ -895,6 +910,8 @@ function updateHero(dt){
   h.animT+=dt;h.hitFlash-=dt;
   h.atkCd-=dt;h.skillCd-=dt;
   // 移動
+  if(ADM.noCd)h.skillCd=0;
+  const spdMul=ADM.fast?1.9:1;
   const ml=Math.hypot(G.mvx,G.mvy);
   if(h.state==='attack'){
     h.atkT+=dt;
@@ -902,8 +919,8 @@ function updateHero(dt){
     if(h.atkT>=a.st+a.ac+a.rec){h.atk=null;h.state='idle';}
   }else{
     if(ml>0){
-      h.x+=G.mvx/ml*d.spd*dt;
-      h.y+=G.mvy/ml*d.spd*dt;
+      h.x+=G.mvx/ml*d.spd*spdMul*dt;
+      h.y+=G.mvy/ml*d.spd*spdMul*dt;
       if(Math.abs(G.mvx)>.1)h.face=G.mvx>0?1:-1;
       h.state='run';
     }else h.state='idle';
@@ -923,14 +940,15 @@ function updateHero(dt){
       h.face=best.x>=h.x?1:-1;
       h.state='attack';h.atk={kind:'light',st:.08,ac:.07,rec:.16};h.atkT=0;
       h.atkStep=(h.atkStep+1)%2;
+      const hdmg=d.dmg*(ADM.heroX?10:1);
       if(d.weapon==='gun'){
         SFX.shot();
-        G.projs.push({x:h.x+h.face*20,y:h.y-40,tgt:best,spd:620,dmg:d.dmg,hero:true,type:'bolt',color:d.col.main});
+        G.projs.push({x:h.x+h.face*20,y:h.y-40,tgt:best,spd:620,dmg:hdmg,hero:true,type:'bolt',color:d.col.main});
       }else{
         SFX.slash();
         setTimeout0(.09,()=>{
           if(!best.dead&&Math.hypot(best.x-h.x,best.y-h.y)<d.atkR+30)
-            damageEnemy(best,d.dmg,true,d.col.sub);
+            damageEnemy(best,hdmg,true,d.col.sub);
         });
       }
     }
@@ -963,7 +981,7 @@ function useSkill(){
     if(e.dead)continue;
     if(Math.hypot(e.x-h.x,e.y-h.y)<=d.skill.r){
       e.slowT=Math.max(e.slowT,.8);e.slowF=.4;
-      damageEnemy(e,d.skill.dmg,true,d.col.glow);
+      damageEnemy(e,d.skill.dmg*(ADM.heroX?10:1),true,d.col.glow);
     }
   }
 }
@@ -977,6 +995,11 @@ function updateGame(rdt){
     if(G.bannerT<=0)$('waveBanner').style.display='none';
   }
   G.shake=Math.max(0,G.shake-rdt*30);
+  // 自動ウェーブ開始
+  if(G.autoT>0&&!G.waveActive&&!G.over){
+    G.autoT-=rdt;
+    if(G.autoT<=0)startWave();
+  }
   // 湧き
   if(G.waveActive&&G.spawnQ.length){
     G.spawnT-=dt;
@@ -1017,7 +1040,10 @@ function updateGame(rdt){
     SFX.win();
     updateHudStatic();
     if(G.wave>=30&&!G.endless){endGame(true);}
-    else BGM.play('prep'); // 準備中は静かな曲に
+    else{
+      BGM.play('prep'); // 準備中は静かな曲に
+      if(G.autoWave){ G.autoT=3; toast('🔁 3秒後に次のWAVEを自動開始','info'); }
+    }
   }
 }
 function endGame(win){
@@ -1442,6 +1468,16 @@ function updateHudStatic(){
   else{bw.textContent=G.wave>=30&&!G.endless?'—':'▶ 次のWAVE';bw.classList.add('go');}
 }
 $('btnWave').onclick=()=>{ if(G&&!G.waveActive){SFX.select();startWave();} };
+$('btnAuto').onclick=function(){
+  if(!G)return;
+  G.autoWave=!G.autoWave;
+  S.settings.autoWave=G.autoWave;persist();
+  this.textContent=G.autoWave?'🔁 自動ON':'🔁 OFF';
+  this.classList.toggle('go',G.autoWave);
+  SFX.select();
+  toast(G.autoWave?'🔁 WAVE自動開始：ON（クリア3秒後に次が来る）':'🔁 WAVE自動開始：OFF','info');
+  if(G.autoWave&&!G.waveActive&&!G.over)G.autoT=1.5;
+};
 $('btnSpeed').onclick=function(){ if(!G)return; G.speed=G.speed===1?2:1; this.textContent='⏩ ×'+G.speed; SFX.select(); };
 const VIEW_LABELS=['🔭 追従','🔭 ワイド','🗺 全体'];
 $('btnView').onclick=function(){
@@ -1490,6 +1526,8 @@ function startGameRun(heroId){
   $('skillNm').textContent=HEROES[heroId].skill.label;
   $('btnSpeed').textContent='⏩ ×1';
   $('btnView').textContent=VIEW_LABELS[G.viewMode];
+  $('btnAuto').textContent=G.autoWave?'🔁 自動ON':'🔁 OFF';
+  $('btnAuto').classList.toggle('go',G.autoWave);
   updateHudStatic();
   BGM.play('prep');
   banner('水晶を守り抜け!');
@@ -1519,6 +1557,90 @@ $('btnHelp').onclick=()=>{ SFX.select(); $('scr-title').classList.remove('on'); 
 document.querySelectorAll('[data-back]').forEach(el=>{
   el.onclick=()=>{ SFX.cancel(); document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on')); $('scr-title').classList.add('on'); };
 });
+/* =====================================================
+   管理者権限（ロゴ7回タップ or 「admin」とタイプで解放）
+===================================================== */
+function killAllEnemies(withReward){
+  if(!G)return 0;
+  let n=0;
+  for(const e of G.enemies){
+    if(e.dead)continue;
+    if(withReward)damageEnemy(e,999999,false,'#ffd166');
+    else{e.dead=true;puff(e.x,e.y-30,'#ffd166',8,180,.4,3);}
+    n++;
+  }
+  return n;
+}
+function gAct(fn){ if(!G||G.preview){toast('⚠️ 出撃中に使ってね','info');SFX.cancel();return;} fn(); }
+const ADM_ITEMS=[
+  {l:'💰 ゴールド +1,000',fn:()=>gAct(()=>{G.gold+=1000;updateHudStatic();SFX.coin();})},
+  {l:'💰 ゴールド +99,999',fn:()=>gAct(()=>{G.gold+=99999;updateHudStatic();SFX.coin();})},
+  {l:'❤️ ライフ +100',fn:()=>gAct(()=>{G.lives+=100;updateHudStatic();SFX.coin();})},
+  {l:'💀 敵を全滅させる',fn:()=>gAct(()=>{const n=killAllEnemies(true);toast(`💀 ${n}体を消し飛ばした`);})},
+  {l:'⏭ WAVE番号 +5',fn:()=>gAct(()=>{if(G.waveActive){toast('⚠️ WAVEの合間に使ってね','info');return;}G.wave=Math.min(G.wave+5,G.endless?G.wave+5:29);updateHudStatic();toast('⏭ WAVE '+(G.wave+1)+' から再開');})},
+  {l:'🏆 即・完全防衛',fn:()=>gAct(()=>{G.spawnQ=[];killAllEnemies(false);G.wave=Math.max(G.wave,30);endGame(true);})},
+  {t:'free',  l:'🆓 建設・強化タダ'},
+  {t:'towerX',l:'🗼 タワー威力×10'},
+  {t:'heroX', l:'🦸 ヒーロー威力×10'},
+  {t:'fast',  l:'💨 ヒーロー俊足'},
+  {t:'noCd',  l:'⚡ スキル連発'},
+  {t:'noLeak',l:'🛡 水晶ダメージ無効'},
+  {l:'♻️ 記録を全リセット',fn:()=>{S.records=defaultSave().records;persist();refreshRecs();toast('♻️ 記録をリセットした','info');}}
+];
+function buildAdmin(){
+  const g=$('admGrid');g.innerHTML='';
+  for(const it of ADM_ITEMS){
+    const b=document.createElement('button');
+    b.className='abtn'+(it.t&&ADM[it.t]?' on':'');
+    b.textContent=it.l;
+    b.onclick=()=>{
+      if(it.t){ADM[it.t]=!ADM[it.t];SFX.up();buildAdmin();toast((ADM[it.t]?'✅ ON：':'⬜ OFF：')+it.l);}
+      else it.fn();
+    };
+    g.appendChild(b);
+  }
+}
+function openAdmin(){ buildAdmin(); $('ovl-admin').classList.add('on'); }
+$('admClose').onclick=()=>{ $('ovl-admin').classList.remove('on'); SFX.cancel(); };
+function refreshAdminBtns(){
+  if(!S.settings.admin)return;
+  if(!$('btnAdmin')){
+    const b=document.createElement('button');
+    b.className='btn small';b.id='btnAdmin';b.textContent='👑 管理者';
+    b.style.borderColor='rgba(255,209,102,.5)';b.style.color='#ffe9b0';
+    b.onclick=()=>{SFX.select();openAdmin();};
+    $('btnHelp').parentElement.appendChild(b);
+  }
+  if(!$('btnAdminP')){
+    const b=document.createElement('button');
+    b.className='btn small';b.id='btnAdminP';b.textContent='👑';
+    b.style.borderColor='rgba(255,209,102,.5)';b.style.color='#ffe9b0';
+    b.onclick=()=>{SFX.select();openAdmin();};
+    $('btnResume').parentElement.appendChild(b);
+  }
+}
+function unlockAdmin(){
+  const first=!S.settings.admin;
+  S.settings.admin=true;persist();
+  refreshAdminBtns();
+  if(first){toast('👑 管理者権限を解放した!!');SFX.win();}
+  openAdmin();
+}
+let admBuf='';
+window.addEventListener('keydown',e=>{
+  admBuf=(admBuf+(e.key||'').toLowerCase()).slice(-5);
+  if(admBuf==='admin')unlockAdmin();
+});
+(function(){
+  const lg=document.querySelector('.logo');
+  let n=0,t0=0;
+  lg.addEventListener('pointerdown',()=>{
+    const now=performance.now();
+    if(now-t0>1600)n=0;
+    t0=now;
+    if(++n>=7){n=0;unlockAdmin();}
+  });
+})();
 /* ===== セルフテスト ===== */
 function runSelfTests(){
   const T=[];const eq=(n,c)=>T.push({name:n,ok:!!c});
@@ -1574,6 +1696,7 @@ function loop(ts){
 }
 buildHeroGrid();
 refreshRecs();
+refreshAdminBtns();
 newGame('retsu');G.preview=true;G.hero.x=MAP_W/2;G.hero.y=MAP_H/2+60;S.records.plays--;persist();
 requestAnimationFrame(loop);
 

@@ -191,6 +191,12 @@ body.battle #hud{display:block}
 .rline{display:flex;justify-content:space-between;font-size:14px;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.06)}
 .rline .v{color:var(--gold);font-weight:700}
 .newrec{color:var(--grn);font-size:11px;margin-left:6px}
+/* 管理者パネル */
+.abtn{cursor:pointer;border:1px solid rgba(255,209,102,.4);background:rgba(30,24,8,.85);color:#ffe9b0;
+  border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;font-family:inherit;transition:.12s}
+.abtn:active{transform:scale(.95)}
+.abtn.on{background:rgba(255,209,102,.28);border-color:var(--gold);color:#fff;box-shadow:0 0 12px rgba(255,209,102,.4)}
+.abtn.on::after{content:" ✓"}
 #toasts{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{padding:10px 22px;border-radius:12px;border:1px solid rgba(255,209,102,.45);background:rgba(20,18,8,.93);
   color:var(--gold);font-size:14px;font-weight:700;animation:tIn .3s ease,tOut .4s ease 2.6s forwards}
@@ -317,6 +323,14 @@ body.battle #hud{display:block}
     <button class="btn pri" id="btnRetry2">🔄 もう一度</button>
     <button class="btn" id="btnToTitle">タイトルへ</button>
   </div>
+</div></div>
+
+<!-- 管理者パネル -->
+<div class="ovl" id="ovl-admin"><div class="ovlBox" style="width:min(540px,94vw)">
+  <h3 style="color:var(--gold);font-size:20px">👑 管理者パネル</h3>
+  <div style="color:var(--tx2);font-size:12px;margin-bottom:12px">戦闘中の項目は出撃中に使えます</div>
+  <div id="admGrid" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center"></div>
+  <div class="row"><button class="btn" id="admClose">とじる</button></div>
 </div></div>
 
 <!-- 確認 -->
@@ -1435,8 +1449,9 @@ function comboScale(n){ return Math.max(.35,1-.06*n); }
 function landHit3(f,e,a,opt){
   opt=opt||{};
   if(e.invulnT>0||e.state==='dodge'||e.state==='down')return false;
+  if(ADM.god&&e.isPlayer)return false; // 管理者：無敵
   const scale=opt.noScale?1:comboScale(f.comboN);
-  const dmg=Math.max(1,Math.round(a.dmg*scale));
+  const dmg=Math.max(1,Math.round(a.dmg*scale*(ADM.oneHit&&f.isPlayer?50:1)));
   e.hp-=dmg;
   e.gauge=Math.min(100,(e.gauge||0)+dmg*.15);
   if(f.gauge!=null){
@@ -1858,7 +1873,7 @@ function updatePlayer(f,dt){
   const ml=Math.hypot(mx,mz);
   if(ml>0){
     mx/=ml;mz/=ml;
-    const spd=f.def.spd;
+    const spd=f.def.spd*(ADM.speed?1.8:1);
     const acc=f.onGround?40:18;
     f.vx=clamp(f.vx+mx*acc*dt,-spd,spd);
     f.vz=clamp(f.vz+mz*acc*dt,-spd,spd);
@@ -2214,6 +2229,7 @@ function step3(rdt){
       G.delayed.splice(i,1);
     }
   }
+  if(ADM.gauge&&G.player)G.player.gauge=100;
   updatePlayer(G.player,dt);
   for(const f of G.fighters){
     if(f.team===1&&f.alive()) aiUpdate3(f,dt);
@@ -2374,6 +2390,88 @@ function toast(msg,cls){
   $('toasts').appendChild(el);
   setTimeout(()=>el.remove(),3100);
 }
+/* =====================================================
+   管理者権限（ロゴ7回タップ or 「admin」とタイプで解放）
+===================================================== */
+const ADM={god:false,gauge:false,oneHit:false,speed:false};
+function bAct(fn){ if(!G){toast('⚠️ 出撃中に使ってね','info');SFX.cancel();return;} fn(); }
+const ADM_ITEMS=[
+  {l:'💰 コイン +1,000',fn:()=>{S.coins+=1000;persist();refreshTitleInfo();SFX.coin();toast('💰 +1,000');}},
+  {l:'💰 コイン +99,999',fn:()=>{S.coins+=99999;persist();refreshTitleInfo();SFX.coin();toast('💰 +99,999');}},
+  {l:'🎭 全キャラ解放',fn:()=>{S.unlocked.chars=CHAR_LIST.slice();persist();buildCharGrid();checkAch();SFX.superGo();toast('🎭 全闘士が解放された!');}},
+  {l:'🏅 実績 全達成',fn:()=>{ACHS.forEach(a=>S.ach[a.id]=true);persist();refreshTitleInfo();SFX.superGo();toast('🏅 全実績を達成した!');}},
+  {l:'❤️ HP全回復',fn:()=>bAct(()=>{G.player.hp=G.player.maxhp;SFX.heal();toast('❤️ 全回復!');})},
+  {l:'💀 敵を全滅させる',fn:()=>bAct(()=>{
+    let n=0;
+    for(const e of G.fighters){ if(e.team===1&&e.alive()){landHit3(G.player,e,{dmg:9999999,kb:6,kbUp:8,launch:true},{noScale:true});n++;} }
+    toast(`💀 ${n}体を消し飛ばした`);
+  })},
+  {l:'⏭ 今のWAVEを即クリア',fn:()=>bAct(()=>{
+    G.modeS.queue=0;
+    for(const e of G.fighters){ if(e.team===1&&e.alive())landHit3(G.player,e,{dmg:9999999,kb:6,kbUp:8,launch:true},{noScale:true}); }
+    toast('⏭ WAVEクリア!');
+  })},
+  {l:'⏭ WAVE番号 +5',fn:()=>bAct(()=>{G.modeS.wave+=5;toast('⏭ 次はWAVE '+(G.modeS.wave+1));})},
+  {t:'god',   l:'🛡 無敵モード'},
+  {t:'gauge', l:'⚡ ゲージ∞'},
+  {t:'oneHit',l:'👊 一撃必殺（威力×50）'},
+  {t:'speed', l:'💨 俊足モード'},
+  {l:'♻️ 記録を全リセット',fn:()=>{S.records=defaultSave().records;persist();refreshTitleInfo();toast('♻️ 記録をリセットした','info');}}
+];
+function buildAdmin(){
+  const g=$('admGrid');g.innerHTML='';
+  for(const it of ADM_ITEMS){
+    const b=document.createElement('button');
+    b.className='abtn'+(it.t&&ADM[it.t]?' on':'');
+    b.textContent=it.l;
+    b.onclick=()=>{
+      if(it.t){ADM[it.t]=!ADM[it.t];SFX.gauge();buildAdmin();toast((ADM[it.t]?'✅ ON：':'⬜ OFF：')+it.l);}
+      else it.fn();
+    };
+    g.appendChild(b);
+  }
+}
+function openAdmin(){ buildAdmin(); $('ovl-admin').classList.add('on'); }
+$('admClose').onclick=()=>{ $('ovl-admin').classList.remove('on'); SFX.cancel(); };
+function refreshAdminBtns(){
+  if(!S.settings.admin)return;
+  if(!$('btnAdmin')){
+    const b=document.createElement('button');
+    b.className='btn small';b.id='btnAdmin';b.textContent='👑 管理者';
+    b.style.borderColor='rgba(255,209,102,.5)';b.style.color='#ffe9b0';
+    b.onclick=()=>{SFX.select();openAdmin();};
+    $('btnHelp').parentElement.appendChild(b);
+  }
+  if(!$('btnAdminP')){
+    const b=document.createElement('button');
+    b.className='btn';b.id='btnAdminP';b.textContent='👑';
+    b.style.borderColor='rgba(255,209,102,.5)';b.style.color='#ffe9b0';
+    b.onclick=()=>{SFX.select();openAdmin();};
+    $('btnResume').parentElement.appendChild(b);
+  }
+}
+function unlockAdmin(){
+  const first=!S.settings.admin;
+  S.settings.admin=true;persist();
+  refreshAdminBtns();
+  if(first){toast('👑 管理者権限を解放した!!');SFX.superGo();}
+  openAdmin();
+}
+let admBuf='';
+window.addEventListener('keydown',e=>{
+  admBuf=(admBuf+(e.key||'').toLowerCase()).slice(-5);
+  if(admBuf==='admin')unlockAdmin();
+});
+(function(){
+  const lg=document.querySelector('.logo');
+  let n=0,t0=0;
+  lg.addEventListener('pointerdown',()=>{
+    const now=performance.now();
+    if(now-t0>1600)n=0;
+    t0=now;
+    if(++n>=7){n=0;unlockAdmin();}
+  });
+})();
 /* =====================================================
    メニューUI
 ===================================================== */
@@ -2540,6 +2638,7 @@ $('btnSelfTest').onclick=()=>{
 if(initThree()){
   buildCharGrid();
   refreshTitleInfo();
+  refreshAdminBtns();
   showPreview();
   requestAnimationFrame(loop);
 }
