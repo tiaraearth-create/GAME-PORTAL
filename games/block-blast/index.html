@@ -183,6 +183,8 @@
   .screen.active { display:flex; animation: screenIn .45s cubic-bezier(.22,1,.36,1); }
   .screen > * { flex-shrink:0; }
   #game-screen { touch-action:none; }
+  body::after{content:"";position:fixed;inset:0;background:#04060e;z-index:9999;pointer-events:none;animation:pageFadeIn .55s ease .05s both}
+  @keyframes pageFadeIn{from{opacity:1}to{opacity:0}}
   @keyframes screenIn { from { opacity:0; transform: translateY(18px) scale(.985); } }
 
   /* ============ メニュー ============ */
@@ -895,6 +897,14 @@
       <div class="setting-row">
         <div><div class="name">✨ すべて解禁</div><div class="desc">ゴッド・終焉・漆黒・実績、ぜんぶまとめて</div></div>
         <button class="btn small" data-action="admin-unlock-all">全解禁</button>
+      </div>
+      <div class="setting-row">
+        <div><div class="name">♾ ヒント＆アンドゥを99に</div><div class="desc">プレイ中のゲームのヒントとアンドゥが実質無限になる</div></div>
+        <button class="btn small" data-action="admin-inf-items">付与</button>
+      </div>
+      <div class="setting-row">
+        <div><div class="name">💯 いまのスコア +10,000</div><div class="desc">プレイ中のゲームのスコアに加算（実績には影響あり）</div></div>
+        <button class="btn small" data-action="admin-score">加算</button>
       </div>
     </div>
     <div style="height:24px"></div>
@@ -3584,6 +3594,21 @@ document.addEventListener("click", (e) => {
         persist();
         flashAdminMsg("ハイスコアをリセットしました", true);
         break;
+      case "admin-inf-items":
+        if (typeof G === "undefined" || !G || G.over) { showToast("⚠️", "プレイ中に使ってね", "管理者権限"); break; }
+        G.hintsLeft = 99; G.undoLeft = 99;
+        try {
+          document.getElementById("hint-count").textContent = 99;
+          document.getElementById("undo-count").textContent = 99;
+          document.getElementById("hint-btn").disabled = false;
+        } catch (e) {}
+        showToast("♾", "ヒントとアンドゥを99にした", "管理者権限"); SFX.ach();
+        break;
+      case "admin-score":
+        if (typeof G === "undefined" || !G || G.over) { showToast("⚠️", "プレイ中に使ってね", "管理者権限"); break; }
+        G.score += 10000;
+        showToast("💯", "スコア +10,000", "管理者権限"); SFX.ach();
+        break;
       case "admin-submit": submitAdminCode(); break;
     }
     return;
@@ -3688,6 +3713,52 @@ function submitAdminCode() {
     input.value = "";
   }
 }
+// プリズムシリーズ共通の隠し解放：タイトルロゴ7回タップ or 「admin」とタイプ
+function grantAdminDirect() {
+  if (save.godUnlocked && save.adminOn) {
+    showToast("👑", "管理者権限はすでに有効（設定画面にパネルがあります）", "管理者権限");
+    return;
+  }
+  save.godUnlocked = true;
+  save.adminOn = true;
+  persist();
+  updateSettingsUI(); updateMenu();
+  godFlash(); SFX.god(); vib([50, 80, 50, 80, 120]);
+  showToast("👑", "管理者権限を取得！設定画面に管理者パネルが出現", "管理者権限");
+}
+// 横画面対応：ゲーム画面が縦にあふれる時は画面の高さにピッタリ収まるよう自動縮小
+function fitGameScale() {
+  const gs = document.getElementById("game-screen");
+  if (!gs) return;
+  if (!gs.classList.contains("active") || window.innerWidth <= window.innerHeight) {
+    gs.style.transform = ""; return;
+  }
+  gs.style.transform = "";
+  const need = gs.scrollHeight, have = window.innerHeight - 8;
+  const k = Math.min(1, have / need);
+  gs.style.transformOrigin = "50% 0";
+  if (k < 0.99) gs.style.transform = `scale(${k})`;
+}
+window.addEventListener("resize", () => setTimeout(fitGameScale, 60));
+const _origBuildBoardDOM = buildBoardDOM;
+buildBoardDOM = function () { _origBuildBoardDOM(); setTimeout(fitGameScale, 30); };
+(function () {
+  let buf = "";
+  window.addEventListener("keydown", e => {
+    buf = (buf + (e.key || "").toLowerCase()).slice(-5);
+    if (buf === "admin") grantAdminDirect();
+  });
+  const lg = document.querySelector("#menu-screen .title");
+  if (lg) {
+    let n = 0, t0 = 0;
+    lg.addEventListener("pointerdown", () => {
+      const now = performance.now();
+      if (now - t0 > 1600) n = 0;
+      t0 = now;
+      if (++n >= 7) { n = 0; grantAdminDirect(); }
+    });
+  }
+})();
 document.getElementById("admin-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") submitAdminCode();
 });

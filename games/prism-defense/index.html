@@ -16,6 +16,8 @@
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:manipulation}
 body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:var(--tx);user-select:none}
 body.touchmode, body.touchmode *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
+body::after{content:"";position:fixed;inset:0;background:#04060e;z-index:9999;pointer-events:none;animation:pageIn .55s ease .05s both}
+@keyframes pageIn{from{opacity:1}to{opacity:0}}
 #cv{position:fixed;inset:0;display:block;touch-action:none}
 /* ===== 画面 ===== */
 .scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;overflow-y:auto;
@@ -150,6 +152,7 @@ body.battle #hud{display:block}
   <div class="row">
     <button class="btn small" id="btnHelp">🕹️ あそびかた</button>
     <button class="btn small" id="btnSelfTest">🧪 セルフテスト</button>
+    <button class="btn small warn" id="btnWipe">🗑 データ削除</button>
     <a class="btn small" href="../../index.html" style="text-decoration:none">🏠 ポータルへ</a>
   </div>
 </section>
@@ -649,9 +652,11 @@ function updateCam(dt){
   if(!G)return;
   cam.zoom+=(camZoomBase()-cam.zoom)*Math.min(1,dt*5);
   const full=G.viewMode===2;
-  const tx=full?MAP_W/2:(G.hero?G.hero.x:MAP_W/2);
-  const ty=full?MAP_H/2:(G.hero?G.hero.y:MAP_H/2);
-  // 追従/ワイドはヒーローを常に画面中央に（端でもズラさない）
+  if(G.look){ G.look.t-=dt; if(G.look.t<=0)G.look=null; }
+  const lk=G.look&&!full;
+  const tx=full?MAP_W/2:lk?G.look.x:(G.hero?G.hero.x:MAP_W/2);
+  const ty=full?MAP_H/2:lk?G.look.y:(G.hero?G.hero.y:MAP_H/2);
+  // 追従/ワイドはヒーローを常に画面中央に（ミニマップタップ中はそこを見る）
   cam.x+=(tx-cam.x)*Math.min(1,dt*6);
   cam.y+=(ty-cam.y)*Math.min(1,dt*6);
 }
@@ -684,7 +689,8 @@ function newGame(heroId){
     gold:220,lives:20,wave:0,waveActive:false,
     spawnQ:[],spawnT:0,enemies:[],projs:[],beams:[],parts:[],rings:[],texts:[],
     sel:null,speed:1,paused:false,over:false,endless:false,delayed:[],
-    viewMode:IS_TOUCH?1:0,zoomMul:1,autoWave:!!S.settings.autoWave,autoT:0,
+    viewMode:IS_TOUCH?(window.innerHeight>window.innerWidth?2:1):0, // スマホ縦は最初から全体ビュー
+    zoomMul:1,autoWave:!!S.settings.autoWave,autoT:0,look:null,
     time:0,kills:0,shake:0,mvx:0,mvy:0,skillFx:0,banner:'',bannerT:0};
   S.records.plays++;persist();
 }
@@ -1379,6 +1385,7 @@ cv.addEventListener('pointermove',e=>{
   const dx=e.clientX-ptr.sx,dy=e.clientY-ptr.sy;
   if(!ptr.stick&&Math.hypot(dx,dy)>SLOP){
     ptr.stick=true;
+    G.look=null; // 移動を始めたら視点をヒーローに戻す
     const b=$('vsBase');
     b.style.left=ptr.sx+'px';b.style.top=ptr.sy+'px';b.style.display='block';
   }
@@ -1402,6 +1409,14 @@ function ptrEnd(e){
 cv.addEventListener('pointerup',ptrEnd);
 cv.addEventListener('pointercancel',ptrEnd);
 function tapSelect(sx,sy){
+  // ミニマップをタップ→その場所へ視点ジャンプ（3秒間）
+  const MW=158,MH=Math.round(MW*MAP_H/MAP_W),mmx=10,mmy=CH-MH-10;
+  if(sx>=mmx-4&&sx<=mmx+MW+4&&sy>=mmy-4&&sy<=mmy+MH+4){
+    const k=MW/MAP_W;
+    G.look={x:clamp((sx-mmx)/k,0,MAP_W),y:clamp((sy-mmy)/k,0,MAP_H),t:3};
+    SFX.select();
+    return;
+  }
   // 画面ピクセル基準で判定（ズームアウト時でも指で押せる大きさを保証）
   let best=null,bd=46;
   for(const pad of PADS){
@@ -1657,6 +1672,23 @@ function runSelfTests(){
   eq('全タワー定義',TOWER_LIST.every(t=>TOWERS[t]&&TOWERS[t].cost>0&&TOWERS[t].range>0));
   return T;
 }
+let wipeArm=0;
+$('btnWipe').onclick=function(){
+  const now=performance.now();
+  if(now-wipeArm>4000){
+    wipeArm=now;
+    this.textContent='🧨 もう一度押すと全削除!';
+    SFX.cancel();
+    toast('⚠️ 記録・設定がすべて消えます。本気なら4秒以内にもう一度','info');
+    setTimeout(()=>{ this.textContent='🗑 データ削除'; },4000);
+    return;
+  }
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  S=defaultSave();persist();
+  AU.applyVol();refreshRecs();
+  this.textContent='🗑 データ削除';wipeArm=0;
+  toast('🧨 セーブデータを完全に削除しました');
+};
 $('btnSelfTest').onclick=()=>{
   const res=runSelfTests(),ng=res.filter(t=>!t.ok);
   if(!ng.length){toast(`🧪 セルフテスト全${res.length}件 合格!`);SFX.coin();}

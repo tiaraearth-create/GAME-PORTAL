@@ -48,6 +48,8 @@
 
   /* ======= 無限キャンバス ======= */
   #viewport { position:fixed; inset:0; z-index:1; overflow:hidden; cursor:grab; touch-action:none; }
+  body::after{content:"";position:fixed;inset:0;background:#04060e;z-index:9999;pointer-events:none;animation:pageFadeIn .55s ease .05s both}
+  @keyframes pageFadeIn{from{opacity:1}to{opacity:0}}
   #viewport.panning { cursor:grabbing; }
   #world { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
 
@@ -702,6 +704,15 @@ function snapshot() {
   histCache.unshift({ t: Date.now(), notes: JSON.parse(JSON.stringify(state.notes)) });
   histCache = histCache.slice(0, 20);
   idbSet("hist", histCache).catch(()=>{});
+}
+async function wipeAllData() {
+  if (!confirm("🧨 全データ削除\n\nすべてのメモ・設定が消えて、最初の状態に戻ります。\n本当に削除しますか？")) return;
+  if (!confirm("⚠️ 最終確認\n\nこの操作は取り消せません。本当の本当に削除しますか？\n（IndexedDB内の日次バックアップだけは残ります）")) return;
+  clearTimeout(saveTimer);
+  try { save = function(){}; } catch(e) {}
+  try { await idbSet("state", null); await idbSet("hist", []); } catch(e) {}
+  try { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_HIST); } catch(e) {}
+  location.reload();
 }
 async function load() {
   try {
@@ -2138,6 +2149,7 @@ const COMMANDS = [
   { ico:"☁️", label:"同期（ファイル同期・P2P）", run: syncMenu },
   { ico:"🔄", label:"今すぐ同期", run: () => syncHandle ? syncNow(true) : syncMenu() },
   { ico:"🗂️", label:"自動バックアップ先フォルダを設定", run: pickBackupFolder },
+  { ico:"🧨", label:"全データ削除（最初の状態に戻す）", sub:"すべてのメモが消えます（IDB内の日次バックアップは残ります）", run: wipeAllData },
   { ico:"💾", label:"バックアップ世代から復元（14日分）", run: openBackups },
   { ico:"💾", label:"エクスポート: JSON（完全バックアップ）", run: exportJson },
   { ico:"📝", label:"エクスポート: Markdown 1ファイル", run: exportMd },
